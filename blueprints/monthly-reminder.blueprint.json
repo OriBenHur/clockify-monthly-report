@@ -1,0 +1,537 @@
+{
+  "name": "Clockify monthly report reminder",
+  "flow": [
+    {
+      "id": 15,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": "<REMINDER_HOOK_ID>",
+        "maxResults": 1
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0,
+          "name": "Reminder trigger"
+        },
+        "parameters": [
+          {
+            "name": "hook",
+            "type": "hook:gateway-webhook",
+            "label": "Webhook",
+            "required": true
+          },
+          {
+            "name": "maxResults",
+            "type": "number",
+            "label": "Maximum number of results"
+          }
+        ],
+        "advanced": true,
+        "interface": [
+          {
+            "name": "__IMTHEADERS__",
+            "spec": [
+              {
+                "name": "name",
+                "type": "text",
+                "label": "Name"
+              },
+              {
+                "name": "value",
+                "type": "text",
+                "label": "Value"
+              }
+            ],
+            "type": "array",
+            "label": "Headers"
+          }
+        ]
+      }
+    },
+    {
+      "id": 9,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "parameters": {},
+      "mapper": null,
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0,
+          "name": "Check token"
+        }
+      },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 16,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "status": 403,
+                "body": "Unauthorized",
+                "headers": [
+                  {
+                    "key": "Content-Type",
+                    "value": "text/html; charset=utf-8"
+                  }
+                ]
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 220,
+                  "name": "Reject the token"
+                }
+              },
+              "filter": {
+                "name": "Reminder token does not match",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{get(map(15.`__IMTHEADERS__`; \"value\"; \"name\"; \"authorization\"); 1)}}",
+                      "b": "Bearer <REMINDER_TOKEN>",
+                      "o": "text:notequal"
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 1,
+              "module": "util:SetVariable2",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "name": "value",
+                "scope": "roundtrip",
+                "value": "{{switch(formatDate(now; \"M\"); \"1\"; \"January\"; \"2\"; \"February\"; \"3\"; \"March\"; \"4\"; \"April\"; \"5\"; \"May\"; \"6\"; \"June\"; \"7\"; \"July\"; \"8\"; \"August\"; \"9\"; \"September\"; \"10\"; \"October\"; \"11\"; \"November\"; \"12\"; \"December\")}} {{formatDate(now; \"YYYY\")}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 0,
+                  "name": "Month year"
+                }
+              },
+              "filter": {
+                "name": "Reminder token matches",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{get(map(15.`__IMTHEADERS__`; \"value\"; \"name\"; \"authorization\"); 1)}}",
+                      "b": "Bearer <REMINDER_TOKEN>",
+                      "o": "text:equal"
+                    }
+                  ]
+                ]
+              }
+            },
+            {
+              "id": 2,
+              "module": "google-drive:makeApiCall",
+              "version": 4,
+              "parameters": {},
+              "mapper": {
+                "url": "/v3/files",
+                "method": "GET",
+                "headers": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "qs": [
+                  {
+                    "key": "q",
+                    "value": "(mimeType = 'application/pdf' or name contains '.pdf') and '<CLOCKIFY_REPORTS_FOLDER_ID>' in parents and trashed = false"
+                  },
+                  {
+                    "key": "orderBy",
+                    "value": "modifiedTime desc"
+                  },
+                  {
+                    "key": "pageSize",
+                    "value": "50"
+                  },
+                  {
+                    "key": "fields",
+                    "value": "files(id,name,mimeType)"
+                  },
+                  {
+                    "key": "supportsAllDrives",
+                    "value": "true"
+                  },
+                  {
+                    "key": "includeItemsFromAllDrives",
+                    "value": "true"
+                  }
+                ]
+              },
+              "metadata": {
+                "designer": {
+                  "x": 900,
+                  "y": 0,
+                  "name": "Look in Clockify Reports"
+                },
+                "parameters": [
+                  {
+                    "name": "__IMTCONN__",
+                    "type": "account:google-restricted",
+                    "label": "Connection",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "id": 12,
+              "module": "builtin:BasicFeeder",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "array": "{{if(length(ifempty(2.body.files; ifempty(2.files; emptyarray))); ifempty(2.body.files; ifempty(2.files; emptyarray)); add(emptyarray; emptystring))}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1200,
+                  "y": 0,
+                  "name": "Each Drive PDF"
+                }
+              }
+            },
+            {
+              "id": 3,
+              "module": "builtin:BasicRouter",
+              "version": 1,
+              "parameters": {},
+              "mapper": null,
+              "metadata": {
+                "designer": {
+                  "x": 1500,
+                  "y": 0,
+                  "name": "Process Drive PDF?"
+                }
+              },
+              "routes": [
+                {
+                  "flow": [
+                    {
+                      "id": 14,
+                      "module": "util:SetVariable2",
+                      "version": 1,
+                      "parameters": {},
+                      "mapper": {
+                        "name": "value",
+                        "scope": "roundtrip",
+                        "value": "1"
+                      },
+                      "metadata": {
+                        "designer": {
+                          "x": 1800,
+                          "y": 220,
+                          "name": "Skip empty Drive slot"
+                        }
+                      },
+                      "filter": {
+                        "name": "Drive file id missing",
+                        "conditions": [
+                          [
+                            {
+                              "a": "{{12.id}}",
+                              "b": "",
+                              "o": "text:equal"
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "flow": [
+                    {
+                      "id": 4,
+                      "module": "google-drive:getAFile",
+                      "version": 4,
+                      "parameters": {},
+                      "mapper": {
+                        "file": "{{12.id}}",
+                        "select": "map",
+                        "formatDrawings": "image/jpeg",
+                        "formatDocuments": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "formatSpreadsheets": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "formatPresentations": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                      },
+                      "metadata": {
+                        "designer": {
+                          "x": 1800,
+                          "y": 0,
+                          "name": "Download from Clockify Reports"
+                        },
+                        "parameters": [
+                          {
+                            "name": "__IMTCONN__",
+                            "type": "account:google-restricted",
+                            "label": "Connection",
+                            "required": true
+                          }
+                        ]
+                      },
+                      "filter": {
+                        "name": "Drive file id present",
+                        "conditions": [
+                          [
+                            {
+                              "a": "{{12.id}}",
+                              "b": "",
+                              "o": "text:notequal"
+                            }
+                          ]
+                        ]
+                      }
+                    },
+                    {
+                      "id": 5,
+                      "module": "http:MakeRequest",
+                      "version": 4,
+                      "parameters": {
+                        "authenticationType": "noAuth",
+                        "tlsType": "",
+                        "proxyKeychain": ""
+                      },
+                      "mapper": {
+                        "url": "<PROCESS_WEBHOOK_URL>",
+                        "method": "post",
+                        "contentType": "multipart",
+                        "parseResponse": false,
+                        "stopOnHttpError": true,
+                        "allowRedirects": true,
+                        "shareCookies": false,
+                        "requestCompressedContent": true,
+                        "timeout": 80,
+                        "multipartBodyContent": [
+                          {
+                            "name": "password",
+                            "value": "<FORM_PASSWORD>",
+                            "multipartFieldType": "text"
+                          },
+                          {
+                            "name": "driveFileId",
+                            "value": "{{12.id}}",
+                            "multipartFieldType": "text"
+                          },
+                          {
+                            "data": "{{4.data}}",
+                            "name": "report",
+                            "fileName": "Clockify_Report.pdf",
+                            "multipartFieldType": "file"
+                          }
+                        ]
+                      },
+                      "metadata": {
+                        "designer": {
+                          "x": 2100,
+                          "y": 0,
+                          "name": "Send the PDF to the processing scenario"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 13,
+              "module": "builtin:BasicAggregator",
+              "version": 1,
+              "parameters": {
+                "feeder": 12
+              },
+              "mapper": {},
+              "metadata": {
+                "designer": {
+                  "x": 2400,
+                  "y": 0,
+                  "name": "After all Drive PDFs"
+                }
+              }
+            },
+            {
+              "id": 11,
+              "module": "google-sheets:makeAPICall",
+              "version": 2,
+              "parameters": {},
+              "mapper": {
+                "url": "spreadsheets/<SPREADSHEET_ID>?fields=sheets.properties.title",
+                "method": "GET",
+                "headers": [],
+                "qs": [],
+                "body": ""
+              },
+              "metadata": {
+                "designer": {
+                  "x": 2700,
+                  "y": 0,
+                  "name": "List sheet tabs"
+                },
+                "parameters": [
+                  {
+                    "name": "__IMTCONN__",
+                    "type": "account:google",
+                    "label": "Connection",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "id": 10,
+              "module": "builtin:BasicFeeder",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "array": "{{11.body.sheets}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 3000,
+                  "y": 0,
+                  "name": "Each company tab"
+                }
+              }
+            },
+            {
+              "id": 6,
+              "module": "google-sheets:makeAPICall",
+              "version": 2,
+              "parameters": {},
+              "mapper": {
+                "url": "spreadsheets/<SPREADSHEET_ID>/values/'{{10.properties.title}}'!A2:A",
+                "method": "GET",
+                "headers": [],
+                "qs": [],
+                "body": ""
+              },
+              "metadata": {
+                "designer": {
+                  "x": 3300,
+                  "y": 0,
+                  "name": "Read logged months"
+                },
+                "parameters": [
+                  {
+                    "name": "__IMTCONN__",
+                    "type": "account:google",
+                    "label": "Connection",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "id": 8,
+              "module": "util:SetVariable2",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "name": "value",
+                "scope": "roundtrip",
+                "value": "{{if(6.statusCode = 200; if(contains(lower(join(flatten(ifempty(6.body.values; emptyarray)); \",\")); lower(trim(1.value))); 0; 1); \"\")}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 3600,
+                  "y": 0,
+                  "name": "Month missing from sheet"
+                }
+              }
+            },
+            {
+              "id": 7,
+              "module": "google-email:sendAnEmail",
+              "version": 4,
+              "parameters": {},
+              "mapper": {
+                "to": [
+                  "<YOUR_EMAIL>"
+                ],
+                "subject": "Upload the Clockify time report — {{10.properties.title}} — {{1.value}}",
+                "bodyType": "rawHtml",
+                "content": "<table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='background:#f4f6f8;padding:24px 12px;'><tr><td align='center'><table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='max-width:560px;background:#ffffff;border-radius:12px;padding:28px 24px;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;font-size:15px;line-height:1.5;'><tr><td><p style='margin:0 0 8px;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;color:#52606d;'>{{10.properties.title}}</p><h1 style='margin:0 0 12px;font-size:22px;line-height:1.3;'>Upload needed — {{1.value}}</h1><p style='margin:0 0 20px;color:#52606d;'>Hello <YOUR_FIRST_NAME>, it is the evening of the last day of the month, and no hours report for {{10.properties.title}} was logged yet.</p><p style='margin:0 0 20px;color:#52606d;'>Upload the Clockify PDF with the form below.</p><p style='margin:0 0 20px;color:#52606d;'>The Gmail draft is created automatically.</p><p style='margin:0 0 20px;'><a href='<UPLOAD_FORM_URL>' style='display:inline-block;background:#0f6f4e;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px;padding:14px 22px;border-radius:10px;'>Upload the report</a></p></td></tr></table></td></tr></table>"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 3900,
+                  "y": 0,
+                  "name": "Send the reminder"
+                },
+                "parameters": [
+                  {
+                    "name": "__IMTCONN__",
+                    "type": "account:google-email",
+                    "label": "Connection",
+                    "required": true
+                  }
+                ]
+              },
+              "filter": {
+                "name": "Confirmed missing month after Sheets OK",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{6.statusCode}}",
+                      "b": "200",
+                      "o": "number:equal"
+                    },
+                    {
+                      "a": "{{6.body}}",
+                      "b": "",
+                      "o": "exist"
+                    },
+                    {
+                      "a": "{{8.value}}",
+                      "b": "1",
+                      "o": "number:equal"
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    }
+  },
+  "scheduling": {
+    "type": "immediately",
+    "maximum_runs_per_minute": 5
+  }
+}

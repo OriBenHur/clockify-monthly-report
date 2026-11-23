@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Upload Clockify report</title>
+</head>
+<body style="margin:0;background:#f4f6f8;color:#1f2933;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
+<main style="max-width:28rem;margin:0 auto;padding:2.5rem 1.25rem;">
+<form id="upload" method="post" enctype="multipart/form-data" action="/api/upload" style="background:#ffffff;border-radius:16px;padding:1.5rem 1.25rem;">
+<h1 style="font-size:1.35rem;line-height:1.3;margin:0 0 0.5rem;">Clockify time report</h1>
+<p style="margin:0 0 1.25rem;color:#52606d;font-size:1rem;line-height:1.5;">Upload the monthly summary PDF and enter the password.</p>
+<p style="margin:0 0 1.25rem;color:#52606d;font-size:1rem;line-height:1.5;">This page does not ask you to sign in to Google.</p>
+<label for="report" style="display:block;font-weight:600;margin:0 0 0.5rem;">PDF file</label>
+<input id="report" name="report" type="file" accept="application/pdf,.pdf" required style="display:block;width:100%;font-size:16px;margin:0 0 1rem;">
+<label for="password" style="display:block;font-weight:600;margin:0 0 0.5rem;">Password</label>
+<input id="password" name="password" type="password" autocomplete="current-password" required style="display:block;width:100%;box-sizing:border-box;font-size:16px;min-height:48px;margin:0 0 1rem;padding:0.75rem;border:1px solid #cbd2d9;border-radius:8px;">
+<p style="margin:0 0 0.75rem;color:#52606d;font-size:1rem;line-height:1.5;">Tick this only when an entry over 9 hours is correct.</p>
+<label style="display:flex;gap:0.6rem;align-items:flex-start;margin:0 0 1rem;font-size:1rem;line-height:1.4;">
+<input type="checkbox" name="confirmLong" value="yes" style="width:1.25rem;height:1.25rem;margin:0.1rem 0 0;">
+<span>An entry over 9 hours is correct.</span>
+</label>
+<input type="hidden" name="driveFileId" value="">
+<button type="submit" style="display:block;width:100%;min-height:48px;border:0;border-radius:12px;background:#0f6f4e;color:#ffffff;font-size:16px;font-weight:600;">Upload report</button>
+<p id="wait" style="display:none;margin:1rem 0 0;color:#52606d;">Creating the Gmail draft.</p>
+<p id="wait-line2" style="display:none;margin:0.35rem 0 0;color:#52606d;">Stay on this page.</p>
+<div id="result" style="display:none;margin:1.25rem 0 0;padding:1rem 0 0;border-top:1px solid #e4e7eb;" aria-live="polite"></div>
+</form>
+</main>
+<script>
+(function () {
+  var form = document.getElementById("upload");
+  var wait = document.getElementById("wait");
+  var waitLine2 = document.getElementById("wait-line2");
+  var result = document.getElementById("result");
+  var button = form.querySelector("button");
+  function setWaiting(on) {
+    wait.style.display = on ? "block" : "none";
+    waitLine2.style.display = on ? "block" : "none";
+  }
+  function breakAfterPeriods(root) {
+    Array.prototype.slice.call(root.querySelectorAll("p")).forEach(function (p) {
+      var parts = p.textContent.split(/\.(?:\s+|$)/).map(function (part) {
+        return part.trim();
+      }).filter(Boolean);
+      if (parts.length < 2) return;
+      var frag = document.createDocumentFragment();
+      parts.forEach(function (part, i) {
+        var next = document.createElement("p");
+        next.setAttribute(
+          "style",
+          i < parts.length - 1
+            ? "margin:0 0 0.75rem;font-size:1rem;line-height:1.5;color:#52606d;"
+            : "margin:0;font-size:1rem;line-height:1.5;color:#52606d;"
+        );
+        next.textContent = /[.!?]$/.test(part) ? part : part + ".";
+        frag.appendChild(next);
+      });
+      p.parentNode.replaceChild(frag, p);
+    });
+  }
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    result.style.display = "none";
+    result.innerHTML = "";
+    setWaiting(true);
+    button.disabled = true;
+    button.textContent = "Uploading…";
+    fetch("/api/upload", { method: "POST", body: new FormData(form), credentials: "same-origin" })
+      .then(function (response) {
+        return response.text().then(function (html) {
+          return { ok: response.ok, html: html };
+        });
+      })
+      .then(function (payload) {
+        var doc = new DOMParser().parseFromString(payload.html, "text/html");
+        var section = doc.querySelector("section") || doc.querySelector("main");
+        if (section) {
+          result.innerHTML = section.innerHTML;
+          breakAfterPeriods(result);
+        } else if (payload.ok) {
+          result.innerHTML = "<p style=\"margin:0;\">Report processed.</p>";
+        } else {
+          result.innerHTML =
+            "<p style=\"margin:0 0 0.75rem;\">Upload failed.</p>" +
+            "<p style=\"margin:0;\">Check the file and password, then try again.</p>";
+        }
+        result.style.display = "block";
+      })
+      .catch(function () {
+        result.innerHTML =
+          "<p style=\"margin:0 0 0.75rem;\">Upload failed.</p>" +
+          "<p style=\"margin:0;\">Check the file and password, then try again.</p>";
+        result.style.display = "block";
+      })
+      .finally(function () {
+        setWaiting(false);
+        button.disabled = false;
+        button.textContent = "Upload report";
+      });
+  });
+})();
+</script>
+</body>
+</html>

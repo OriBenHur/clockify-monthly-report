@@ -1,0 +1,1568 @@
+{
+  "name": "Clockify monthly report",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": "<PROCESS_HOOK_ID>",
+        "maxResults": 1
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0,
+          "name": "Report upload"
+        },
+        "parameters": [
+          {
+            "name": "hook",
+            "type": "hook:gateway-webhook",
+            "label": "Webhook",
+            "required": true
+          },
+          {
+            "name": "maxResults",
+            "type": "number",
+            "label": "Maximum number of results"
+          }
+        ],
+        "restore": {
+          "parameters": {
+            "hook": {
+              "label": "Clockify report",
+              "data": {
+                "editable": "true"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "parameters": {},
+      "mapper": null,
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0,
+          "name": "Check password"
+        }
+      },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 3,
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "status": 403,
+                "body": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"robots\" content=\"noindex\">\n<title>Unauthorized</title>\n</head>\n<body style=\"margin:0;background:#f4f6f8;color:#1f2933;font-family:Segoe UI,Helvetica,Arial,sans-serif;\">\n<main style=\"max-width:28rem;margin:0 auto;padding:2.5rem 1.25rem;\">\n<section style=\"background:#ffffff;border-radius:16px;padding:1.75rem 1.25rem;\">\n<h1 style=\"font-size:1.35rem;line-height:1.35;margin:0 0 0.75rem;\">This form is not authorized.</h1>\n<p style=\"margin:0;font-size:1rem;line-height:1.5;color:#52606d;\">Open the upload link from the reminder email and try again.</p>\n</section>\n</main>\n</body>\n</html>\n",
+                "headers": [
+                  {
+                    "key": "Content-Type",
+                    "value": "text/html; charset=utf-8"
+                  }
+                ]
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": -220,
+                  "name": "Reject the password"
+                }
+              },
+              "filter": {
+                "name": "Form password does not match",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{1.password}}",
+                      "b": "<FORM_PASSWORD>",
+                      "o": "text:notequal"
+                    }
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 4,
+              "module": "google-drive:uploadAFile",
+              "version": 4,
+              "parameters": {},
+              "mapper": {
+                "select": "map",
+                "destination": "drive",
+                "folderId": "<PROCESSED_FOLDER_ID>",
+                "filename": "Clockify_extract.pdf",
+                "data": "{{1.report.data}}",
+                "convert": true,
+                "targetType": "application/vnd.google-apps.document"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 0,
+                  "name": "Read the PDF in Drive"
+                },
+                "parameters": [
+                  {
+                    "name": "__IMTCONN__",
+                    "type": "account:google-restricted",
+                    "label": "Connection",
+                    "required": true
+                  }
+                ]
+              },
+              "onerror": [
+                {
+                  "id": 40,
+                  "module": "gateway:WebhookRespond",
+                  "version": 1,
+                  "parameters": {},
+                  "mapper": {
+                    "status": 422,
+                    "body": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"robots\" content=\"noindex\">\n<title>Report not processed</title>\n</head>\n<body style=\"margin:0;background:#f4f6f8;color:#1f2933;font-family:Segoe UI,Helvetica,Arial,sans-serif;\">\n<main style=\"max-width:28rem;margin:0 auto;padding:2.5rem 1.25rem;\">\n<section style=\"background:#ffffff;border-radius:16px;padding:1.75rem 1.25rem;\">\n<h1 style=\"font-size:1.35rem;line-height:1.35;margin:0 0 0.75rem;\">The report was not processed.</h1>\n<p style=\"margin:0 0 0.75rem;font-size:1rem;line-height:1.5;color:#52606d;\">Check that the PDF is a Clockify summary with dates as DD/MM/YYYY and a Total of HH:MM or HH:MM:SS.</p>\n<p style=\"margin:0;font-size:1rem;line-height:1.5;color:#52606d;\">Then look at the scenario run in Make.</p>\n</section>\n</main>\n</body>\n</html>\n",
+                    "headers": [
+                      {
+                        "key": "Content-Type",
+                        "value": "text/html; charset=utf-8"
+                      }
+                    ]
+                  },
+                  "metadata": {
+                    "designer": {
+                      "x": 600,
+                      "y": 220,
+                      "name": "Tell the browser it failed"
+                    }
+                  }
+                },
+                {
+                  "id": 41,
+                  "module": "builtin:Rollback",
+                  "version": 1,
+                  "parameters": {},
+                  "mapper": {},
+                  "metadata": {
+                    "designer": {
+                      "x": 600,
+                      "y": 440,
+                      "name": "Roll back"
+                    }
+                  }
+                }
+              ],
+              "filter": {
+                "name": "Form password matches",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{1.password}}",
+                      "b": "<FORM_PASSWORD>",
+                      "o": "text:equal"
+                    }
+                  ]
+                ]
+              }
+            },
+            {
+              "id": 5,
+              "module": "google-drive:getAFile",
+              "version": 4,
+              "parameters": {},
+              "mapper": {
+                "select": "map",
+                "file": "{{4.id}}",
+                "formatDocuments": "text/plain"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 900,
+                  "y": 0,
+                  "name": "PDF text"
+                },
+                "parameters": [
+                  {
+                    "name": "__IMTCONN__",
+                    "type": "account:google-restricted",
+                    "label": "Connection",
+                    "required": true
+                  }
+                ]
+              },
+              "onerror": [
+                {
+                  "id": 42,
+                  "module": "gateway:WebhookRespond",
+                  "version": 1,
+                  "parameters": {},
+                  "mapper": {
+                    "status": 422,
+                    "body": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"robots\" content=\"noindex\">\n<title>Report not processed</title>\n</head>\n<body style=\"margin:0;background:#f4f6f8;color:#1f2933;font-family:Segoe UI,Helvetica,Arial,sans-serif;\">\n<main style=\"max-width:28rem;margin:0 auto;padding:2.5rem 1.25rem;\">\n<section style=\"background:#ffffff;border-radius:16px;padding:1.75rem 1.25rem;\">\n<h1 style=\"font-size:1.35rem;line-height:1.35;margin:0 0 0.75rem;\">The report was not processed.</h1>\n<p style=\"margin:0 0 0.75rem;font-size:1rem;line-height:1.5;color:#52606d;\">Check that the PDF is a Clockify summary with dates as DD/MM/YYYY and a Total of HH:MM or HH:MM:SS.</p>\n<p style=\"margin:0;font-size:1rem;line-height:1.5;color:#52606d;\">Then look at the scenario run in Make.</p>\n</section>\n</main>\n</body>\n</html>\n",
+                    "headers": [
+                      {
+                        "key": "Content-Type",
+                        "value": "text/html; charset=utf-8"
+                      }
+                    ]
+                  },
+                  "metadata": {
+                    "designer": {
+                      "x": 900,
+                      "y": 220,
+                      "name": "Tell the browser it failed"
+                    }
+                  }
+                },
+                {
+                  "id": 43,
+                  "module": "builtin:Rollback",
+                  "version": 1,
+                  "parameters": {},
+                  "mapper": {},
+                  "metadata": {
+                    "designer": {
+                      "x": 900,
+                      "y": 440,
+                      "name": "Roll back"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": 35,
+              "module": "google-drive:makeApiCall",
+              "version": 4,
+              "parameters": {},
+              "mapper": {
+                "url": "/v3/files/{{4.id}}",
+                "method": "DELETE",
+                "headers": [],
+                "qs": [],
+                "body": ""
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1200,
+                  "y": 0,
+                  "name": "Delete the temporary Doc"
+                },
+                "parameters": [
+                  {
+                    "name": "__IMTCONN__",
+                    "type": "account:google-restricted",
+                    "label": "Connection",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "id": 6,
+              "module": "regexp:Parser",
+              "version": 1,
+              "parameters": {
+                "pattern": "(?<start>\\d{2}/\\d{2}/\\d{4})\\s*[-–—]\\s*(?<end>\\d{2}/\\d{2}/\\d{4})",
+                "global": false,
+                "sensitive": true,
+                "multiline": false,
+                "singleline": false,
+                "continueWhenNoRes": false,
+                "ignoreInfiniteLoopsWhenGlobal": false
+              },
+              "mapper": {
+                "text": "{{5.data}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1500,
+                  "y": 0,
+                  "name": "Start and end dates"
+                },
+                "interface": [
+                  {
+                    "name": "start",
+                    "type": "text",
+                    "label": "start"
+                  },
+                  {
+                    "name": "end",
+                    "type": "text",
+                    "label": "end"
+                  }
+                ]
+              },
+              "onerror": [
+                {
+                  "id": 44,
+                  "module": "gateway:WebhookRespond",
+                  "version": 1,
+                  "parameters": {},
+                  "mapper": {
+                    "status": 422,
+                    "body": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"robots\" content=\"noindex\">\n<title>Report not processed</title>\n</head>\n<body style=\"margin:0;background:#f4f6f8;color:#1f2933;font-family:Segoe UI,Helvetica,Arial,sans-serif;\">\n<main style=\"max-width:28rem;margin:0 auto;padding:2.5rem 1.25rem;\">\n<section style=\"background:#ffffff;border-radius:16px;padding:1.75rem 1.25rem;\">\n<h1 style=\"font-size:1.35rem;line-height:1.35;margin:0 0 0.75rem;\">The report was not processed.</h1>\n<p style=\"margin:0 0 0.75rem;font-size:1rem;line-height:1.5;color:#52606d;\">Check that the PDF is a Clockify summary with dates as DD/MM/YYYY and a Total of HH:MM or HH:MM:SS.</p>\n<p style=\"margin:0;font-size:1rem;line-height:1.5;color:#52606d;\">Then look at the scenario run in Make.</p>\n</section>\n</main>\n</body>\n</html>\n",
+                    "headers": [
+                      {
+                        "key": "Content-Type",
+                        "value": "text/html; charset=utf-8"
+                      }
+                    ]
+                  },
+                  "metadata": {
+                    "designer": {
+                      "x": 1500,
+                      "y": 220,
+                      "name": "Tell the browser it failed"
+                    }
+                  }
+                },
+                {
+                  "id": 45,
+                  "module": "builtin:Rollback",
+                  "version": 1,
+                  "parameters": {},
+                  "mapper": {},
+                  "metadata": {
+                    "designer": {
+                      "x": 1500,
+                      "y": 440,
+                      "name": "Roll back"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": 7,
+              "module": "regexp:Parser",
+              "version": 1,
+              "parameters": {
+                "pattern": "(?:^|\\n)\\s*Total:?\\s*(?<hours>\\d{1,4}:\\d{2})(?::\\d{2})?",
+                "global": false,
+                "sensitive": false,
+                "multiline": false,
+                "singleline": false,
+                "continueWhenNoRes": false,
+                "ignoreInfiniteLoopsWhenGlobal": false
+              },
+              "mapper": {
+                "text": "{{5.data}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1800,
+                  "y": 0,
+                  "name": "Total hours"
+                },
+                "interface": [
+                  {
+                    "name": "hours",
+                    "type": "text",
+                    "label": "hours"
+                  }
+                ]
+              },
+              "onerror": [
+                {
+                  "id": 46,
+                  "module": "gateway:WebhookRespond",
+                  "version": 1,
+                  "parameters": {},
+                  "mapper": {
+                    "status": 422,
+                    "body": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"robots\" content=\"noindex\">\n<title>Report not processed</title>\n</head>\n<body style=\"margin:0;background:#f4f6f8;color:#1f2933;font-family:Segoe UI,Helvetica,Arial,sans-serif;\">\n<main style=\"max-width:28rem;margin:0 auto;padding:2.5rem 1.25rem;\">\n<section style=\"background:#ffffff;border-radius:16px;padding:1.75rem 1.25rem;\">\n<h1 style=\"font-size:1.35rem;line-height:1.35;margin:0 0 0.75rem;\">The report was not processed.</h1>\n<p style=\"margin:0 0 0.75rem;font-size:1rem;line-height:1.5;color:#52606d;\">Check that the PDF is a Clockify summary with dates as DD/MM/YYYY and a Total of HH:MM or HH:MM:SS.</p>\n<p style=\"margin:0;font-size:1rem;line-height:1.5;color:#52606d;\">Then look at the scenario run in Make.</p>\n</section>\n</main>\n</body>\n</html>\n",
+                    "headers": [
+                      {
+                        "key": "Content-Type",
+                        "value": "text/html; charset=utf-8"
+                      }
+                    ]
+                  },
+                  "metadata": {
+                    "designer": {
+                      "x": 1800,
+                      "y": 220,
+                      "name": "Tell the browser it failed"
+                    }
+                  }
+                },
+                {
+                  "id": 47,
+                  "module": "builtin:Rollback",
+                  "version": 1,
+                  "parameters": {},
+                  "mapper": {},
+                  "metadata": {
+                    "designer": {
+                      "x": 1800,
+                      "y": 440,
+                      "name": "Roll back"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": 30,
+              "module": "regexp:Parser",
+              "version": 1,
+              "parameters": {
+                "pattern": "(?:^|\\n)\\s*(?<company>[^\\r\\n\\-]+?)\\s*-\\s*[^\\r\\n]+?\\s*-\\s*[^\\r\\n]+",
+                "global": false,
+                "sensitive": true,
+                "multiline": false,
+                "singleline": false,
+                "continueWhenNoRes": false,
+                "ignoreInfiniteLoopsWhenGlobal": false
+              },
+              "mapper": {
+                "text": "{{5.data}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 2100,
+                  "y": 0,
+                  "name": "Company name"
+                },
+                "interface": [
+                  {
+                    "name": "company",
+                    "type": "text",
+                    "label": "company"
+                  }
+                ]
+              },
+              "onerror": [
+                {
+                  "id": 48,
+                  "module": "gateway:WebhookRespond",
+                  "version": 1,
+                  "parameters": {},
+                  "mapper": {
+                    "status": 422,
+                    "body": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"robots\" content=\"noindex\">\n<title>Report not processed</title>\n</head>\n<body style=\"margin:0;background:#f4f6f8;color:#1f2933;font-family:Segoe UI,Helvetica,Arial,sans-serif;\">\n<main style=\"max-width:28rem;margin:0 auto;padding:2.5rem 1.25rem;\">\n<section style=\"background:#ffffff;border-radius:16px;padding:1.75rem 1.25rem;\">\n<h1 style=\"font-size:1.35rem;line-height:1.35;margin:0 0 0.75rem;\">The report was not processed.</h1>\n<p style=\"margin:0 0 0.75rem;font-size:1rem;line-height:1.5;color:#52606d;\">Check that the PDF is a Clockify summary with dates as DD/MM/YYYY and a Total of HH:MM or HH:MM:SS.</p>\n<p style=\"margin:0;font-size:1rem;line-height:1.5;color:#52606d;\">Then look at the scenario run in Make.</p>\n</section>\n</main>\n</body>\n</html>\n",
+                    "headers": [
+                      {
+                        "key": "Content-Type",
+                        "value": "text/html; charset=utf-8"
+                      }
+                    ]
+                  },
+                  "metadata": {
+                    "designer": {
+                      "x": 2100,
+                      "y": 220,
+                      "name": "Tell the browser it failed"
+                    }
+                  }
+                },
+                {
+                  "id": 49,
+                  "module": "builtin:Rollback",
+                  "version": 1,
+                  "parameters": {},
+                  "mapper": {},
+                  "metadata": {
+                    "designer": {
+                      "x": 2100,
+                      "y": 440,
+                      "name": "Roll back"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": 9,
+              "module": "util:SetVariable2",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "name": "value",
+                "scope": "roundtrip",
+                "value": "{{7.hours}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 2400,
+                  "y": 0,
+                  "name": "Hours HH:MM"
+                }
+              }
+            },
+            {
+              "id": 10,
+              "module": "util:SetVariable2",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "name": "value",
+                "scope": "roundtrip",
+                "value": "{{parseNumber(get(split(9.value; \":\"); 1)) * 60 + parseNumber(get(split(9.value; \":\"); 2))}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 2700,
+                  "y": 0,
+                  "name": "Billable minutes"
+                }
+              }
+            },
+            {
+              "id": 11,
+              "module": "util:SetVariable2",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "name": "value",
+                "scope": "roundtrip",
+                "value": "{{10.value / 60}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 3000,
+                  "y": 0,
+                  "name": "Decimal hours"
+                }
+              }
+            },
+            {
+              "id": 12,
+              "module": "util:SetVariable2",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "name": "value",
+                "scope": "roundtrip",
+                "value": "{{switch(formatDate(parseDate(6.start; \"DD/MM/YYYY\"); \"M\"); \"1\"; \"January\"; \"2\"; \"February\"; \"3\"; \"March\"; \"4\"; \"April\"; \"5\"; \"May\"; \"6\"; \"June\"; \"7\"; \"July\"; \"8\"; \"August\"; \"9\"; \"September\"; \"10\"; \"October\"; \"11\"; \"November\"; \"12\"; \"December\")}} {{formatDate(parseDate(6.start; \"DD/MM/YYYY\"); \"YYYY\")}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 3300,
+                  "y": 0,
+                  "name": "Month year"
+                }
+              }
+            },
+            {
+              "id": 13,
+              "module": "util:SetVariable2",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "name": "value",
+                "scope": "roundtrip",
+                "value": "{{switch(formatDate(parseDate(6.start; \"DD/MM/YYYY\"); \"M\"); \"1\"; \"January\"; \"2\"; \"February\"; \"3\"; \"March\"; \"4\"; \"April\"; \"5\"; \"May\"; \"6\"; \"June\"; \"7\"; \"July\"; \"8\"; \"August\"; \"9\"; \"September\"; \"10\"; \"October\"; \"11\"; \"November\"; \"12\"; \"December\")}} {{formatDate(parseDate(6.start; \"DD/MM/YYYY\"); \"D\")}}, {{formatDate(parseDate(6.start; \"DD/MM/YYYY\"); \"YYYY\")}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 3600,
+                  "y": 0,
+                  "name": "Start date"
+                }
+              }
+            },
+            {
+              "id": 14,
+              "module": "util:SetVariable2",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "name": "value",
+                "scope": "roundtrip",
+                "value": "{{switch(formatDate(parseDate(6.end; \"DD/MM/YYYY\"); \"M\"); \"1\"; \"January\"; \"2\"; \"February\"; \"3\"; \"March\"; \"4\"; \"April\"; \"5\"; \"May\"; \"6\"; \"June\"; \"7\"; \"July\"; \"8\"; \"August\"; \"9\"; \"September\"; \"10\"; \"October\"; \"11\"; \"November\"; \"12\"; \"December\")}} {{formatDate(parseDate(6.end; \"DD/MM/YYYY\"); \"D\")}}, {{formatDate(parseDate(6.end; \"DD/MM/YYYY\"); \"YYYY\")}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 3900,
+                  "y": 0,
+                  "name": "End date"
+                }
+              }
+            },
+            {
+              "id": 15,
+              "module": "util:SetVariable2",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "name": "value",
+                "scope": "roundtrip",
+                "value": "{{formatNumber(10.value * <HOURLY_RATE_ILS> / 60; 2; \".\"; \",\")}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 4200,
+                  "y": 0,
+                  "name": "Subtotal"
+                }
+              }
+            },
+            {
+              "id": 16,
+              "module": "util:SetVariable2",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "name": "value",
+                "scope": "roundtrip",
+                "value": "{{formatNumber(floor(10.value * <HOURLY_RATE_ILS> * 100 / 60 * <VAT_PERCENT> / 100 + 0.5) / 100; 2; \".\"; \",\")}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 4500,
+                  "y": 0,
+                  "name": "VAT amount"
+                }
+              }
+            },
+            {
+              "id": 17,
+              "module": "util:SetVariable2",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "name": "value",
+                "scope": "roundtrip",
+                "value": "{{formatNumber((10.value * <HOURLY_RATE_ILS> * 100 / 60 + floor(10.value * <HOURLY_RATE_ILS> * 100 / 60 * <VAT_PERCENT> / 100 + 0.5)) / 100; 2; \".\"; \",\")}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 4800,
+                  "y": 0,
+                  "name": "Total with VAT"
+                }
+              }
+            },
+            {
+              "id": 34,
+              "module": "util:SetVariable2",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "name": "value",
+                "scope": "roundtrip",
+                "value": "<YOUR_NAME>_Time_Report_{{replace(30.company; \" \"; \"_\")}}_{{replace(12.value; \" \"; \"_\")}}.pdf"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 5100,
+                  "y": 0,
+                  "name": "PDF file name"
+                }
+              }
+            },
+            {
+              "id": 36,
+              "module": "regexp:Parser",
+              "version": 1,
+              "parameters": {
+                "pattern": "(?<!Total: )(?<!Total )(?<!Total\\n)(?<!Total:\\n)(?<!otal: )(?<!otal )(?<!otal\\n)(?<!otal:\\n)(?<!OTAL: )(?<!OTAL )(?<!OTAL\\n)(?<!OTAL:\\n)(?<long>(?:[1-9]\\d{1,3}:[0-5]\\d:[0-5]\\d)|(?:0?9:(?:0[1-9]|[1-5]\\d):[0-5]\\d)|(?:0?9:00:(?:0[1-9]|[1-5]\\d)))",
+                "global": false,
+                "sensitive": false,
+                "multiline": false,
+                "singleline": false,
+                "continueWhenNoRes": true,
+                "ignoreInfiniteLoopsWhenGlobal": false
+              },
+              "mapper": {
+                "text": "{{5.data}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 5400,
+                  "y": 0,
+                  "name": "Long entry"
+                },
+                "interface": [
+                  {
+                    "name": "long",
+                    "type": "text",
+                    "label": "long"
+                  }
+                ]
+              }
+            },
+            {
+              "id": 52,
+              "module": "util:SetVariable2",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "name": "value",
+                "scope": "roundtrip",
+                "value": "{{ifempty(36.long; \"\")}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 5700,
+                  "y": 0,
+                  "name": "Long entry text"
+                }
+              }
+            },
+            {
+              "id": 37,
+              "module": "builtin:BasicRouter",
+              "version": 1,
+              "parameters": {},
+              "mapper": null,
+              "metadata": {
+                "designer": {
+                  "x": 6000,
+                  "y": 0,
+                  "name": "Long entry?"
+                }
+              },
+              "routes": [
+                {
+                  "flow": [
+                    {
+                      "id": 18,
+                      "module": "google-sheets:makeAPICall",
+                      "version": 2,
+                      "parameters": {},
+                      "mapper": {
+                        "url": "spreadsheets/<SPREADSHEET_ID>/values/'{{30.company}}'!A2:A",
+                        "method": "GET",
+                        "headers": [],
+                        "qs": [],
+                        "body": ""
+                      },
+                      "metadata": {
+                        "designer": {
+                          "x": 6300,
+                          "y": 0,
+                          "name": "Read logged months"
+                        },
+                        "parameters": [
+                          {
+                            "name": "__IMTCONN__",
+                            "type": "account:google",
+                            "label": "Connection",
+                            "required": true
+                          }
+                        ]
+                      },
+                      "filter": {
+                        "name": "No long entry or already confirmed",
+                        "conditions": [
+                          [
+                            {
+                              "a": "{{52.value}}",
+                              "b": "",
+                              "o": "notexist"
+                            }
+                          ],
+                          [
+                            {
+                              "a": "{{52.value}}",
+                              "b": "",
+                              "o": "text:equal"
+                            }
+                          ],
+                          [
+                            {
+                              "a": "{{1.confirmLong}}",
+                              "b": "yes",
+                              "o": "text:equal"
+                            }
+                          ]
+                        ]
+                      }
+                    },
+                    {
+                      "id": 28,
+                      "module": "util:SetVariable2",
+                      "version": 1,
+                      "parameters": {},
+                      "mapper": {
+                        "name": "value",
+                        "scope": "roundtrip",
+                        "value": "{{join(flatten(ifempty(18.body.values; emptyarray)); \",\")}}"
+                      },
+                      "metadata": {
+                        "designer": {
+                          "x": 6600,
+                          "y": 0,
+                          "name": "Logged months text"
+                        }
+                      }
+                    },
+                    {
+                      "id": 29,
+                      "module": "util:SetVariable2",
+                      "version": 1,
+                      "parameters": {},
+                      "mapper": {
+                        "name": "value",
+                        "scope": "roundtrip",
+                        "value": "{{if(contains(28.value; 12.value); 1; 0)}}"
+                      },
+                      "metadata": {
+                        "designer": {
+                          "x": 6900,
+                          "y": 0,
+                          "name": "Already logged"
+                        }
+                      }
+                    },
+                    {
+                      "id": 19,
+                      "module": "builtin:BasicRouter",
+                      "version": 1,
+                      "parameters": {},
+                      "mapper": null,
+                      "metadata": {
+                        "designer": {
+                          "x": 7200,
+                          "y": 0,
+                          "name": "Already logged?"
+                        }
+                      },
+                      "routes": [
+                        {
+                          "flow": [
+                            {
+                              "id": 20,
+                              "module": "builtin:BasicRouter",
+                              "version": 1,
+                              "parameters": {},
+                              "mapper": null,
+                              "metadata": {
+                                "designer": {
+                                  "x": 7500,
+                                  "y": 220,
+                                  "name": "Move a Drive PDF?"
+                                }
+                              },
+                              "routes": [
+                                {
+                                  "flow": [
+                                    {
+                                      "id": 31,
+                                      "module": "google-drive:makeApiCall",
+                                      "version": 4,
+                                      "parameters": {},
+                                      "mapper": {
+                                        "url": "/v3/files/{{1.driveFileId}}",
+                                        "method": "PATCH",
+                                        "headers": [
+                                          {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                          }
+                                        ],
+                                        "qs": [
+                                          {
+                                            "key": "addParents",
+                                            "value": "<PROCESSED_FOLDER_ID>"
+                                          },
+                                          {
+                                            "key": "removeParents",
+                                            "value": "<CLOCKIFY_REPORTS_FOLDER_ID>"
+                                          }
+                                        ],
+                                        "body": "{\"name\": \"{{34.value}}\"}"
+                                      },
+                                      "metadata": {
+                                        "designer": {
+                                          "x": 7800,
+                                          "y": 220,
+                                          "name": "Rename and move into Processed"
+                                        },
+                                        "parameters": [
+                                          {
+                                            "name": "__IMTCONN__",
+                                            "type": "account:google-restricted",
+                                            "label": "Connection",
+                                            "required": true
+                                          }
+                                        ]
+                                      },
+                                      "filter": {
+                                        "name": "Came with a Drive file id",
+                                        "conditions": [
+                                          [
+                                            {
+                                              "a": "{{1.driveFileId}}",
+                                              "b": "",
+                                              "o": "text:notequal"
+                                            }
+                                          ]
+                                        ]
+                                      }
+                                    },
+                                    {
+                                      "id": 32,
+                                      "module": "gateway:WebhookRespond",
+                                      "version": 1,
+                                      "parameters": {},
+                                      "mapper": {
+                                        "status": 200,
+                                        "body": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"robots\" content=\"noindex\">\n<title>Already processed</title>\n</head>\n<body style=\"margin:0;background:#f4f6f8;color:#1f2933;font-family:Segoe UI,Helvetica,Arial,sans-serif;\">\n<main style=\"max-width:28rem;margin:0 auto;padding:2.5rem 1.25rem;\">\n<section style=\"background:#ffffff;border-radius:16px;padding:1.75rem 1.25rem;\">\n<h1 style=\"font-size:1.35rem;line-height:1.35;margin:0 0 0.75rem;\">This month is already logged.</h1>\n<p style=\"margin:0;font-size:1rem;line-height:1.5;color:#52606d;\">{{12.value}} is already in the sheet, so no second row or Gmail draft was created.</p>\n</section>\n</main>\n</body>\n</html>\n",
+                                        "headers": [
+                                          {
+                                            "key": "Content-Type",
+                                            "value": "text/html; charset=utf-8"
+                                          }
+                                        ]
+                                      },
+                                      "metadata": {
+                                        "designer": {
+                                          "x": 8100,
+                                          "y": 220,
+                                          "name": "Already processed"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "flow": [
+                                    {
+                                      "id": 33,
+                                      "module": "gateway:WebhookRespond",
+                                      "version": 1,
+                                      "parameters": {},
+                                      "mapper": {
+                                        "status": 200,
+                                        "body": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"robots\" content=\"noindex\">\n<title>Already processed</title>\n</head>\n<body style=\"margin:0;background:#f4f6f8;color:#1f2933;font-family:Segoe UI,Helvetica,Arial,sans-serif;\">\n<main style=\"max-width:28rem;margin:0 auto;padding:2.5rem 1.25rem;\">\n<section style=\"background:#ffffff;border-radius:16px;padding:1.75rem 1.25rem;\">\n<h1 style=\"font-size:1.35rem;line-height:1.35;margin:0 0 0.75rem;\">This month is already logged.</h1>\n<p style=\"margin:0;font-size:1rem;line-height:1.5;color:#52606d;\">{{12.value}} is already in the sheet, so no second row or Gmail draft was created.</p>\n</section>\n</main>\n</body>\n</html>\n",
+                                        "headers": [
+                                          {
+                                            "key": "Content-Type",
+                                            "value": "text/html; charset=utf-8"
+                                          }
+                                        ]
+                                      },
+                                      "metadata": {
+                                        "designer": {
+                                          "x": 7800,
+                                          "y": 440,
+                                          "name": "Already processed"
+                                        }
+                                      },
+                                      "filter": {
+                                        "name": "Came from the upload form",
+                                        "conditions": [
+                                          [
+                                            {
+                                              "a": "{{1.driveFileId}}",
+                                              "b": "",
+                                              "o": "text:equal"
+                                            }
+                                          ]
+                                        ]
+                                      }
+                                    }
+                                  ]
+                                }
+                              ],
+                              "filter": {
+                                "name": "Month already logged",
+                                "conditions": [
+                                  [
+                                    {
+                                      "a": "{{12.value}}",
+                                      "b": "",
+                                      "o": "text:notequal"
+                                    },
+                                    {
+                                      "a": "{{29.value}}",
+                                      "b": "1",
+                                      "o": "number:equal"
+                                    }
+                                  ]
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "flow": [
+                            {
+                              "id": 21,
+                              "module": "google-sheets:addRow",
+                              "version": 2,
+                              "parameters": {},
+                              "mapper": {
+                                "mode": "map",
+                                "insertUnformatted": false,
+                                "valueInputOption": "RAW",
+                                "insertDataOption": "INSERT_ROWS",
+                                "spreadsheetId": "/<SPREADSHEET_ID>",
+                                "sheetId": "{{30.company}}",
+                                "tableFirstRow": "A1:Z1",
+                                "values": {
+                                  "0": "{{12.value}}",
+                                  "1": "{{13.value}}",
+                                  "2": "{{14.value}}",
+                                  "3": "{{9.value}}",
+                                  "4": "<HOURLY_RATE_ILS>",
+                                  "5": "<APPROVER_NAME>",
+                                  "6": "<TO_EMAIL_1>, <TO_EMAIL_2>",
+                                  "7": "<CC_EMAIL_1>, <CC_EMAIL_2>, <CC_EMAIL_3>, <CC_EMAIL_4>",
+                                  "8": "<VAT_PERCENT>"
+                                }
+                              },
+                              "metadata": {
+                                "designer": {
+                                  "x": 7500,
+                                  "y": 0,
+                                  "name": "Append the month"
+                                },
+                                "parameters": [
+                                  {
+                                    "name": "__IMTCONN__",
+                                    "type": "account:google",
+                                    "label": "Connection",
+                                    "required": true
+                                  }
+                                ],
+                                "restore": {
+                                  "expect": {
+                                    "mode": {
+                                      "label": "Enter manually"
+                                    },
+                                    "insertUnformatted": {
+                                      "mode": "chose"
+                                    },
+                                    "valueInputOption": {
+                                      "mode": "chose",
+                                      "label": "Raw"
+                                    },
+                                    "insertDataOption": {
+                                      "mode": "chose",
+                                      "label": "Insert rows"
+                                    },
+                                    "tableFirstRow": {
+                                      "label": "A-Z"
+                                    }
+                                  }
+                                },
+                                "expect": [
+                                  {
+                                    "name": "mode",
+                                    "type": "select",
+                                    "label": "Search Method",
+                                    "required": true,
+                                    "validate": {
+                                      "enum": [
+                                        "select",
+                                        "fromAll",
+                                        "map"
+                                      ]
+                                    }
+                                  },
+                                  {
+                                    "name": "insertUnformatted",
+                                    "type": "boolean",
+                                    "label": "Unformatted",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "valueInputOption",
+                                    "type": "select",
+                                    "label": "Value input option",
+                                    "required": true,
+                                    "validate": {
+                                      "enum": [
+                                        "USER_ENTERED",
+                                        "RAW"
+                                      ]
+                                    }
+                                  },
+                                  {
+                                    "name": "insertDataOption",
+                                    "type": "select",
+                                    "label": "Insert data option",
+                                    "validate": {
+                                      "enum": [
+                                        "INSERT_ROWS",
+                                        "OVERWRITE"
+                                      ]
+                                    }
+                                  },
+                                  {
+                                    "name": "spreadsheetId",
+                                    "type": "text",
+                                    "label": "Spreadsheet ID",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "sheetId",
+                                    "type": "text",
+                                    "label": "Sheet Name",
+                                    "required": true
+                                  },
+                                  {
+                                    "name": "tableFirstRow",
+                                    "type": "select",
+                                    "label": "Column range",
+                                    "required": true,
+                                    "validate": {
+                                      "enum": [
+                                        "A1:Z1",
+                                        "A1:BZ1",
+                                        "A1:CZ1",
+                                        "A1:DZ1",
+                                        "A1:MZ1",
+                                        "A1:ZZ1"
+                                      ]
+                                    }
+                                  },
+                                  {
+                                    "name": "values",
+                                    "type": "collection",
+                                    "label": "Values in columns",
+                                    "spec": [
+                                      {
+                                        "name": "0",
+                                        "type": "text",
+                                        "label": "A"
+                                      },
+                                      {
+                                        "name": "1",
+                                        "type": "text",
+                                        "label": "B"
+                                      },
+                                      {
+                                        "name": "2",
+                                        "type": "text",
+                                        "label": "C"
+                                      },
+                                      {
+                                        "name": "3",
+                                        "type": "text",
+                                        "label": "D"
+                                      },
+                                      {
+                                        "name": "4",
+                                        "type": "text",
+                                        "label": "E"
+                                      },
+                                      {
+                                        "name": "5",
+                                        "type": "text",
+                                        "label": "F"
+                                      },
+                                      {
+                                        "name": "6",
+                                        "type": "text",
+                                        "label": "G"
+                                      },
+                                      {
+                                        "name": "7",
+                                        "type": "text",
+                                        "label": "H"
+                                      },
+                                      {
+                                        "name": "8",
+                                        "type": "text",
+                                        "label": "I"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              "filter": {
+                                "name": "Month not logged yet",
+                                "conditions": [
+                                  [
+                                    {
+                                      "a": "{{12.value}}",
+                                      "b": "",
+                                      "o": "text:notequal"
+                                    },
+                                    {
+                                      "a": "{{29.value}}",
+                                      "b": "0",
+                                      "o": "number:equal"
+                                    }
+                                  ]
+                                ]
+                              }
+                            },
+                            {
+                              "id": 22,
+                              "module": "google-email:createADraft",
+                              "version": 4,
+                              "parameters": {},
+                              "mapper": {
+                                "to": [
+                                  "<TO_EMAIL_1>",
+                                  "<TO_EMAIL_2>"
+                                ],
+                                "cc": [
+                                  "<CC_EMAIL_1>",
+                                  "<CC_EMAIL_2>",
+                                  "<CC_EMAIL_3>",
+                                  "<CC_EMAIL_4>"
+                                ],
+                                "subject": "DevOps Consulting Time Report - {{12.value}}",
+                                "bodyType": "rawHtml",
+                                "content": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>DevOps Consulting Time Report</title>\n</head>\n<body style=\"margin:0;padding:0;background:#f4f6f8;\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f4f6f8;padding:24px 12px;\">\n<tr><td align=\"center\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:560px;background:#ffffff;border-radius:12px;padding:28px 24px;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;font-size:15px;line-height:1.5;\">\n<tr><td>\n<p style=\"margin:0 0 8px;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;color:#52606d;\">DevOps consulting</p>\n<h1 style=\"margin:0 0 20px;font-size:22px;line-height:1.3;\">Time report — {{12.value}}</h1>\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n<tr><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;color:#52606d;'>Period</td><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;text-align:right;font-weight:600;'>{{13.value}} – {{14.value}}</td></tr>\n<tr><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;color:#52606d;'>Total hours</td><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;text-align:right;font-weight:600;'>{{9.value}}</td></tr>\n<tr><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;color:#52606d;'>Hourly rate</td><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;text-align:right;font-weight:600;'><HOURLY_RATE_ILS> ILS</td></tr>\n<tr><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;color:#52606d;'>Base</td><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;text-align:right;font-weight:600;'>{{15.value}} ILS</td></tr>\n<tr><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;color:#52606d;'>VAT <VAT_PERCENT>%</td><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;text-align:right;font-weight:600;'>{{16.value}} ILS</td></tr>\n<tr><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;color:#52606d;'>Total</td><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;text-align:right;font-weight:600;'>{{17.value}} ILS</td></tr>\n</table>\n{{if(parseNumber(get(split(9.value; \":\"); 1)) * 60 + parseNumber(get(split(9.value; \":\"); 2)) > 4800; \"<div style='margin:20px 0 0;padding:12px 14px;background:#fff8e6;border-left:3px solid #b45309;'><p style='margin:0;'>This month's total exceeds 80 hours.</p><p style='margin:8px 0 0;'><OVERTIME_RATE_NOTE></p></div>\"; \"\")}}\n<p style=\"margin:20px 0 0;\"><APPROVER_NAME>, please approve this time report.</p>\n<p style=\"margin:16px 0 0;color:#52606d;font-size:13px;\">The Clockify PDF is attached.</p>\n</td></tr>\n</table>\n</td></tr>\n</table>\n</body>\n</html>\n",
+                                "attachments": [
+                                  {
+                                    "filename": "{{34.value}}",
+                                    "data": "{{1.report.data}}"
+                                  }
+                                ]
+                              },
+                              "metadata": {
+                                "designer": {
+                                  "x": 7800,
+                                  "y": 0,
+                                  "name": "Create Gmail draft"
+                                },
+                                "parameters": [
+                                  {
+                                    "name": "__IMTCONN__",
+                                    "type": "account:google-email",
+                                    "label": "Connection",
+                                    "required": true
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "id": 23,
+                              "module": "builtin:BasicRouter",
+                              "version": 1,
+                              "parameters": {},
+                              "mapper": null,
+                              "metadata": {
+                                "designer": {
+                                  "x": 8100,
+                                  "y": 0,
+                                  "name": "Save the renamed PDF"
+                                }
+                              },
+                              "routes": [
+                                {
+                                  "flow": [
+                                    {
+                                      "id": 25,
+                                      "module": "google-drive:makeApiCall",
+                                      "version": 4,
+                                      "parameters": {},
+                                      "mapper": {
+                                        "url": "/v3/files/{{1.driveFileId}}",
+                                        "method": "PATCH",
+                                        "headers": [
+                                          {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                          }
+                                        ],
+                                        "qs": [
+                                          {
+                                            "key": "addParents",
+                                            "value": "<PROCESSED_FOLDER_ID>"
+                                          },
+                                          {
+                                            "key": "removeParents",
+                                            "value": "<CLOCKIFY_REPORTS_FOLDER_ID>"
+                                          }
+                                        ],
+                                        "body": "{\"name\": \"{{34.value}}\"}"
+                                      },
+                                      "metadata": {
+                                        "designer": {
+                                          "x": 8400,
+                                          "y": 0,
+                                          "name": "Rename and move into Processed"
+                                        },
+                                        "parameters": [
+                                          {
+                                            "name": "__IMTCONN__",
+                                            "type": "account:google-restricted",
+                                            "label": "Connection",
+                                            "required": true
+                                          }
+                                        ]
+                                      },
+                                      "filter": {
+                                        "name": "Came with a Drive file id",
+                                        "conditions": [
+                                          [
+                                            {
+                                              "a": "{{1.driveFileId}}",
+                                              "b": "",
+                                              "o": "text:notequal"
+                                            }
+                                          ]
+                                        ]
+                                      }
+                                    },
+                                    {
+                                      "id": 27,
+                                      "module": "gateway:WebhookRespond",
+                                      "version": 1,
+                                      "parameters": {},
+                                      "mapper": {
+                                        "status": 200,
+                                        "body": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"robots\" content=\"noindex\">\n<title>Report processed</title>\n</head>\n<body style=\"margin:0;background:#f4f6f8;color:#1f2933;font-family:Segoe UI,Helvetica,Arial,sans-serif;\">\n<main style=\"max-width:28rem;margin:0 auto;padding:2.5rem 1.25rem;\">\n<section style=\"background:#ffffff;border-radius:16px;padding:1.75rem 1.25rem;\">\n<h1 style=\"font-size:1.35rem;line-height:1.35;margin:0 0 0.75rem;\">✅ Report successfully processed and Gmail draft created!</h1>\n<p style=\"margin:0 0 0.75rem;font-size:1rem;line-height:1.5;color:#52606d;\">{{12.value}} drafts was created.</p>\n<p style=\"margin:0;font-size:1rem;line-height:1.5;color:#52606d;\">Open Gmail drafts, review the attached PDF, and send it when it looks right.</p>\n</section>\n</main>\n</body>\n</html>\n",
+                                        "headers": [
+                                          {
+                                            "key": "Content-Type",
+                                            "value": "text/html; charset=utf-8"
+                                          }
+                                        ]
+                                      },
+                                      "metadata": {
+                                        "designer": {
+                                          "x": 8700,
+                                          "y": 0,
+                                          "name": "Success page"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "flow": [
+                                    {
+                                      "id": 26,
+                                      "module": "google-drive:uploadAFile",
+                                      "version": 4,
+                                      "parameters": {},
+                                      "mapper": {
+                                        "select": "map",
+                                        "destination": "drive",
+                                        "folderId": "<PROCESSED_FOLDER_ID>",
+                                        "filename": "{{34.value}}",
+                                        "data": "{{1.report.data}}",
+                                        "convert": false
+                                      },
+                                      "metadata": {
+                                        "designer": {
+                                          "x": 8400,
+                                          "y": 220,
+                                          "name": "Upload into Processed"
+                                        },
+                                        "parameters": [
+                                          {
+                                            "name": "__IMTCONN__",
+                                            "type": "account:google-restricted",
+                                            "label": "Connection",
+                                            "required": true
+                                          }
+                                        ]
+                                      },
+                                      "filter": {
+                                        "name": "Came from the upload form",
+                                        "conditions": [
+                                          [
+                                            {
+                                              "a": "{{1.driveFileId}}",
+                                              "b": "",
+                                              "o": "text:equal"
+                                            }
+                                          ]
+                                        ]
+                                      }
+                                    },
+                                    {
+                                      "id": 24,
+                                      "module": "gateway:WebhookRespond",
+                                      "version": 1,
+                                      "parameters": {},
+                                      "mapper": {
+                                        "status": 200,
+                                        "body": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"robots\" content=\"noindex\">\n<title>Report processed</title>\n</head>\n<body style=\"margin:0;background:#f4f6f8;color:#1f2933;font-family:Segoe UI,Helvetica,Arial,sans-serif;\">\n<main style=\"max-width:28rem;margin:0 auto;padding:2.5rem 1.25rem;\">\n<section style=\"background:#ffffff;border-radius:16px;padding:1.75rem 1.25rem;\">\n<h1 style=\"font-size:1.35rem;line-height:1.35;margin:0 0 0.75rem;\">✅ Report successfully processed and Gmail draft created!</h1>\n<p style=\"margin:0 0 0.75rem;font-size:1rem;line-height:1.5;color:#52606d;\">{{12.value}} drafts was created.</p>\n<p style=\"margin:0;font-size:1rem;line-height:1.5;color:#52606d;\">Open Gmail drafts, review the attached PDF, and send it when it looks right.</p>\n</section>\n</main>\n</body>\n</html>\n",
+                                        "headers": [
+                                          {
+                                            "key": "Content-Type",
+                                            "value": "text/html; charset=utf-8"
+                                          }
+                                        ]
+                                      },
+                                      "metadata": {
+                                        "designer": {
+                                          "x": 8700,
+                                          "y": 220,
+                                          "name": "Success page"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "flow": [
+                    {
+                      "id": 38,
+                      "module": "gateway:WebhookRespond",
+                      "version": 1,
+                      "parameters": {},
+                      "mapper": {
+                        "status": 200,
+                        "body": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"robots\" content=\"noindex\">\n<title>Check this entry</title>\n</head>\n<body style=\"margin:0;background:#f4f6f8;color:#1f2933;font-family:Segoe UI,Helvetica,Arial,sans-serif;\">\n<main style=\"max-width:28rem;margin:0 auto;padding:2.5rem 1.25rem;\">\n<section style=\"background:#ffffff;border-radius:16px;padding:1.75rem 1.25rem;\">\n<h1 style=\"font-size:1.35rem;line-height:1.35;margin:0 0 0.75rem;\">An entry is longer than 9 hours.</h1>\n<p style=\"margin:0 0 0.75rem;font-size:1rem;line-height:1.5;color:#52606d;\">{{52.value}} is one continuous log.</p>\n<p style=\"margin:0 0 0.75rem;font-size:1rem;line-height:1.5;color:#52606d;\">Nothing was logged and no client draft was created.</p>\n<p style=\"margin:0;font-size:1rem;line-height:1.5;color:#52606d;\">Fix it in Clockify, or tick the box and upload the same PDF again.</p>\n</section>\n</main>\n</body>\n</html>\n",
+                        "headers": [
+                          {
+                            "key": "Content-Type",
+                            "value": "text/html; charset=utf-8"
+                          }
+                        ]
+                      },
+                      "metadata": {
+                        "designer": {
+                          "x": 6300,
+                          "y": 220,
+                          "name": "Ask for confirmation"
+                        }
+                      },
+                      "filter": {
+                        "name": "Form upload needs confirmation",
+                        "conditions": [
+                          [
+                            {
+                              "a": "{{52.value}}",
+                              "b": "",
+                              "o": "text:notequal"
+                            },
+                            {
+                              "a": "{{1.confirmLong}}",
+                              "b": "yes",
+                              "o": "text:notequal"
+                            },
+                            {
+                              "a": "{{1.driveFileId}}",
+                              "b": "",
+                              "o": "text:equal"
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "flow": [
+                    {
+                      "id": 39,
+                      "module": "google-email:sendAnEmail",
+                      "version": 4,
+                      "parameters": {},
+                      "mapper": {
+                        "to": [
+                          "<YOUR_EMAIL>"
+                        ],
+                        "subject": "Clockify entry longer than 9 hours — {{12.value}}",
+                        "bodyType": "rawHtml",
+                        "content": "<p style='margin:0 0 12px;'>An entry is longer than 9 hours.</p><p style='margin:0 0 12px;'>{{52.value}} is one continuous log.</p><p style='margin:0;'>Nothing was logged and no client draft was created.</p>"
+                      },
+                      "metadata": {
+                        "designer": {
+                          "x": 6300,
+                          "y": -220,
+                          "name": "Email the long entry"
+                        },
+                        "parameters": [
+                          {
+                            "name": "__IMTCONN__",
+                            "type": "account:google-email",
+                            "label": "Connection",
+                            "required": true
+                          }
+                        ]
+                      },
+                      "filter": {
+                        "name": "Drive file needs confirmation",
+                        "conditions": [
+                          [
+                            {
+                              "a": "{{52.value}}",
+                              "b": "",
+                              "o": "text:notequal"
+                            },
+                            {
+                              "a": "{{1.confirmLong}}",
+                              "b": "yes",
+                              "o": "text:notequal"
+                            },
+                            {
+                              "a": "{{1.driveFileId}}",
+                              "b": "",
+                              "o": "text:notequal"
+                            }
+                          ]
+                        ]
+                      }
+                    },
+                    {
+                      "id": 51,
+                      "module": "gateway:WebhookRespond",
+                      "version": 1,
+                      "parameters": {},
+                      "mapper": {
+                        "status": 200,
+                        "body": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"robots\" content=\"noindex\">\n<title>Check this entry</title>\n</head>\n<body style=\"margin:0;background:#f4f6f8;color:#1f2933;font-family:Segoe UI,Helvetica,Arial,sans-serif;\">\n<main style=\"max-width:28rem;margin:0 auto;padding:2.5rem 1.25rem;\">\n<section style=\"background:#ffffff;border-radius:16px;padding:1.75rem 1.25rem;\">\n<h1 style=\"font-size:1.35rem;line-height:1.35;margin:0 0 0.75rem;\">An entry is longer than 9 hours.</h1>\n<p style=\"margin:0 0 0.75rem;font-size:1rem;line-height:1.5;color:#52606d;\">{{52.value}} is one continuous log.</p>\n<p style=\"margin:0 0 0.75rem;font-size:1rem;line-height:1.5;color:#52606d;\">Nothing was logged and no client draft was created.</p>\n<p style=\"margin:0;font-size:1rem;line-height:1.5;color:#52606d;\">Fix it in Clockify, or tick the box and upload the same PDF again.</p>\n</section>\n</main>\n</body>\n</html>\n",
+                        "headers": [
+                          {
+                            "key": "Content-Type",
+                            "value": "text/html; charset=utf-8"
+                          }
+                        ]
+                      },
+                      "metadata": {
+                        "designer": {
+                          "x": 6600,
+                          "y": -220,
+                          "name": "Long entry held"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    }
+  },
+  "scheduling": {
+    "type": "immediately",
+    "maximum_runs_per_minute": 5
+  }
+}

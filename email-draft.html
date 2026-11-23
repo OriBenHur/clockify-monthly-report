@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DevOps Consulting Time Report</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6f8;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;padding:24px 12px;">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;padding:28px 24px;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;font-size:15px;line-height:1.5;">
+<tr><td>
+<p style="margin:0 0 8px;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;color:#52606d;">DevOps consulting</p>
+<h1 style="margin:0 0 20px;font-size:22px;line-height:1.3;">Time report — {{12.value}}</h1>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+<tr><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;color:#52606d;'>Period</td><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;text-align:right;font-weight:600;'>{{13.value}} – {{14.value}}</td></tr>
+<tr><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;color:#52606d;'>Total hours</td><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;text-align:right;font-weight:600;'>{{9.value}}</td></tr>
+<tr><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;color:#52606d;'>Hourly rate</td><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;text-align:right;font-weight:600;'>[HOURLY_RATE] ILS</td></tr>
+<tr><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;color:#52606d;'>Base</td><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;text-align:right;font-weight:600;'>{{15.value}} ILS</td></tr>
+<tr><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;color:#52606d;'>VAT [VAT_PERCENT]%</td><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;text-align:right;font-weight:600;'>{{16.value}} ILS</td></tr>
+<tr><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;color:#52606d;'>Total</td><td style='padding:10px 0;border-bottom:1px solid #e4e7eb;text-align:right;font-weight:600;'>{{17.value}} ILS</td></tr>
+</table>
+{{if(parseNumber(get(split(9.value; ":"); 1)) * 60 + parseNumber(get(split(9.value; ":"); 2)) > 4800; "<div style='margin:20px 0 0;padding:12px 14px;background:#fff8e6;border-left:3px solid #b45309;'><p style='margin:0;'>This month's total exceeds 80 hours.</p><p style='margin:8px 0 0;'>[OVERTIME_RATE_NOTE]</p></div>"; "")}}
+<p style="margin:20px 0 0;">[APPROVER_NAME], please approve this time report.</p>
+<p style="margin:16px 0 0;color:#52606d;font-size:13px;">The Clockify PDF is attached.</p>
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>
