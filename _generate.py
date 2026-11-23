@@ -40,7 +40,7 @@ TO = ENV["TO_RECIPIENTS"]
 CC = ENV["CC_RECIPIENTS"]
 HOURLY_RATE = int(ENV["HOURLY_RATE"])
 VAT_PERCENT = int(ENV["VAT_PERCENT"])
-OVERTIME_NOTE = "This month's total exceeds 80 hours."
+OVERTIME_HOURS = ENV["OVERTIME_THRESHOLD_HOURS"]
 OVERTIME_RATE = ENV["OVERTIME_RATE_NOTE"]
 SUCCESS = "Report successfully processed and Gmail draft created!"
 DEFAULT_SHEET_TAB = ENV["CLIENT_NAME"]
@@ -171,25 +171,25 @@ TODAY = 'formatDate(now; "YYYY-MM-DD")'
 
 def page(title, heading, *details):
     paras = "\n".join(
-        f'<p style="margin:{"0 0 0.75rem" if i < len(details) - 1 else "0"};'
+        f'            <p style="margin:{"0 0 0.75rem" if i < len(details) - 1 else "0"};'
         f'font-size:1rem;line-height:1.5;color:#52606d;">{detail}</p>'
         for i, detail in enumerate(details)
     )
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex">
-<title>{title}</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
+    <title>{title}</title>
 </head>
 <body style="margin:0;background:#f4f6f8;color:#1f2933;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
-<main style="max-width:28rem;margin:0 auto;padding:2.5rem 1.25rem;">
-<section style="background:#ffffff;border-radius:16px;padding:1.75rem 1.25rem;">
-<h1 style="font-size:1.35rem;line-height:1.35;margin:0 0 0.75rem;">{heading}</h1>
+    <main style="max-width:28rem;margin:0 auto;padding:2.5rem 1.25rem;">
+        <section style="background:#ffffff;border-radius:16px;padding:1.75rem 1.25rem;">
+            <h1 style="font-size:1.35rem;line-height:1.35;margin:0 0 0.75rem;">{heading}</h1>
 {paras}
-</section>
-</main>
+        </section>
+    </main>
 </body>
 </html>
 """
@@ -226,19 +226,48 @@ LONG_HTML = page(
 )
 
 
-def email_html():
-    overtime = (
-        '{{if(' + MINUTES_EXPR + ' > 4800; "'
+def overtime_block(hours):
+    if not hours:
+        return ""
+    hours = int(hours)
+    return (
+        '{{if(' + MINUTES_EXPR + f' > {hours} * 60; "'
         "<div style='margin:20px 0 0;padding:12px 14px;background:#fff8e6;border-left:3px solid #b45309;'>"
-        "<p style='margin:0;'>" + OVERTIME_NOTE + "</p>"
+        f"<p style='margin:0;'>This month's total exceeds {hours} hours.</p>"
         "<p style='margin:8px 0 0;'>" + OVERTIME_RATE + "</p>"
         "</div>\"; \"\")}}"
     )
+
+
+def overtime_redactions():
+    if not OVERTIME_HOURS or not OVERTIME_RATE:
+        return []
+    hours = int(OVERTIME_HOURS)
+    return [
+        (f"> {hours} * 60; ", "> <OVERTIME_THRESHOLD_HOURS> * 60; "),
+        (f"exceeds {hours} hours.", "exceeds <OVERTIME_THRESHOLD_HOURS> hours."),
+        (OVERTIME_RATE, "<OVERTIME_RATE_NOTE>"),
+    ]
+
+
+def overtime_markers():
+    if not OVERTIME_HOURS or not OVERTIME_RATE:
+        return []
+    hours = int(OVERTIME_HOURS)
+    return [
+        (f"> {hours} * 60; ", "> [OVERTIME_THRESHOLD_HOURS] * 60; "),
+        (f"exceeds {hours} hours.", "exceeds [OVERTIME_THRESHOLD_HOURS] hours."),
+        (OVERTIME_RATE, "[OVERTIME_RATE_NOTE]"),
+    ]
+
+
+def email_html():
+    overtime = overtime_block(OVERTIME_HOURS)
     row = (
-        "<tr>"
-        "<td style='padding:10px 0;border-bottom:1px solid #e4e7eb;color:#52606d;'>{label}</td>"
-        "<td style='padding:10px 0;border-bottom:1px solid #e4e7eb;text-align:right;font-weight:600;'>{value}</td>"
-        "</tr>"
+        "                                <tr>\n"
+        "                                    <td style='padding:10px 0;border-bottom:1px solid #e4e7eb;color:#52606d;'>{label}</td>\n"
+        "                                    <td style='padding:10px 0;border-bottom:1px solid #e4e7eb;text-align:right;font-weight:600;'>{value}</td>\n"
+        "                                </tr>"
     )
     rows = "\n".join([
         row.format(label="Period", value="{{13.value}} – {{14.value}}"),
@@ -251,27 +280,31 @@ def email_html():
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DevOps Consulting Time Report</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DevOps Consulting Time Report</title>
 </head>
 <body style="margin:0;padding:0;background:#f4f6f8;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;padding:24px 12px;">
-<tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;padding:28px 24px;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;font-size:15px;line-height:1.5;">
-<tr><td>
-<p style="margin:0 0 8px;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;color:#52606d;">DevOps consulting</p>
-<h1 style="margin:0 0 20px;font-size:22px;line-height:1.3;">Time report — {{{{12.value}}}}</h1>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;padding:24px 12px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;padding:28px 24px;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;font-size:15px;line-height:1.5;">
+                    <tr>
+                        <td>
+                            <p style="margin:0 0 8px;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;color:#52606d;">DevOps consulting</p>
+                            <h1 style="margin:0 0 20px;font-size:22px;line-height:1.3;">Time report — {{{{12.value}}}}</h1>
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
 {rows}
-</table>
-{overtime}
-<p style="margin:20px 0 0;">{APPROVER_NAME}, please approve this time report.</p>
-<p style="margin:16px 0 0;color:#52606d;font-size:13px;">The Clockify PDF is attached.</p>
-</td></tr>
-</table>
-</td></tr>
-</table>
+                            </table>
+                            {overtime}
+                            <p style="margin:20px 0 0;">{APPROVER_NAME}, please approve this time report.</p>
+                            <p style="margin:16px 0 0;color:#52606d;font-size:13px;">The Clockify PDF is attached.</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>
 """
@@ -280,34 +313,37 @@ def email_html():
 UPLOAD_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex">
-<title>Upload Clockify report</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
+    <title>Upload Clockify report</title>
 </head>
 <body style="margin:0;background:#f4f6f8;color:#1f2933;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
-<main style="max-width:28rem;margin:0 auto;padding:2.5rem 1.25rem;">
-<form id="upload" method="post" enctype="multipart/form-data" action="/api/upload" style="background:#ffffff;border-radius:16px;padding:1.5rem 1.25rem;">
-<h1 style="font-size:1.35rem;line-height:1.3;margin:0 0 0.5rem;">Clockify time report</h1>
-<p style="margin:0 0 1.25rem;color:#52606d;font-size:1rem;line-height:1.5;">Upload the monthly summary PDF and enter the password.</p>
-<p style="margin:0 0 1.25rem;color:#52606d;font-size:1rem;line-height:1.5;">This page does not ask you to sign in to Google.</p>
-<label for="report" style="display:block;font-weight:600;margin:0 0 0.5rem;">PDF file</label>
-<input id="report" name="report" type="file" accept="application/pdf,.pdf" required style="display:block;width:100%;font-size:16px;margin:0 0 1rem;">
-<label for="password" style="display:block;font-weight:600;margin:0 0 0.5rem;">Password</label>
-<input id="password" name="password" type="password" autocomplete="current-password" required style="display:block;width:100%;box-sizing:border-box;font-size:16px;min-height:48px;margin:0 0 1rem;padding:0.75rem;border:1px solid #cbd2d9;border-radius:8px;">
-<p style="margin:0 0 0.75rem;color:#52606d;font-size:1rem;line-height:1.5;">Tick this only when an entry over 9 hours is correct.</p>
-<label style="display:flex;gap:0.6rem;align-items:flex-start;margin:0 0 1rem;font-size:1rem;line-height:1.4;">
-<input type="checkbox" name="confirmLong" value="yes" style="width:1.25rem;height:1.25rem;margin:0.1rem 0 0;">
-<span>An entry over 9 hours is correct.</span>
-</label>
-<input type="hidden" name="driveFileId" value="">
-<button type="submit" style="display:block;width:100%;min-height:48px;border:0;border-radius:12px;background:#0f6f4e;color:#ffffff;font-size:16px;font-weight:600;">Upload report</button>
-<p id="wait" style="display:none;margin:1rem 0 0;color:#52606d;">Creating the Gmail draft.</p>
-<p id="wait-line2" style="display:none;margin:0.35rem 0 0;color:#52606d;">Stay on this page.</p>
-<div id="result" style="display:none;margin:1.25rem 0 0;padding:1rem 0 0;border-top:1px solid #e4e7eb;" aria-live="polite"></div>
-</form>
-</main>
-<script>
+    <main style="max-width:28rem;margin:0 auto;padding:2.5rem 1.25rem;">
+        <form id="upload" method="post" enctype="multipart/form-data" action="/api/upload"
+            style="background:#ffffff;border-radius:16px;padding:1.5rem 1.25rem;">
+            <h1 style="font-size:1.35rem;line-height:1.3;margin:0 0 0.5rem;">Clockify time report</h1>
+            <p style="margin:0 0 1.25rem;color:#52606d;font-size:1rem;line-height:1.5;">Upload the monthly summary PDF and enter the password.</p>
+            <p style="margin:0 0 1.25rem;color:#52606d;font-size:1rem;line-height:1.5;">This page does not ask you to sign in to Google.</p>
+            <label for="report" style="display:block;font-weight:600;margin:0 0 0.5rem;">PDF file</label>
+            <input id="report" name="report" type="file" accept="application/pdf,.pdf" required
+                style="display:block;width:100%;font-size:16px;margin:0 0 1rem;">
+            <label for="password" style="display:block;font-weight:600;margin:0 0 0.5rem;">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required
+                style="display:block;width:100%;box-sizing:border-box;font-size:16px;min-height:48px;margin:0 0 1rem;padding:0.75rem;border:1px solid #cbd2d9;border-radius:8px;">
+            <p style="margin:0 0 0.75rem;color:#52606d;font-size:1rem;line-height:1.5;">Tick this only when an entry over 9 hours is correct.</p>
+            <label style="display:flex;gap:0.6rem;align-items:flex-start;margin:0 0 1rem;font-size:1rem;line-height:1.4;">
+                <input type="checkbox" name="confirmLong" value="yes" style="width:1.25rem;height:1.25rem;margin:0.1rem 0 0;">
+                <span>An entry over 9 hours is correct.</span>
+            </label>
+            <input type="hidden" name="driveFileId" value="">
+            <button type="submit" style="display:block;width:100%;min-height:48px;border:0;border-radius:12px;background:#0f6f4e;color:#ffffff;font-size:16px;font-weight:600;">Upload report</button>
+            <p id="wait" style="display:none;margin:1rem 0 0;color:#52606d;">Creating the Gmail draft.</p>
+            <p id="wait-line2" style="display:none;margin:0.35rem 0 0;color:#52606d;">Stay on this page.</p>
+            <div id="result" style="display:none;margin:1.25rem 0 0;padding:1rem 0 0;border-top:1px solid #e4e7eb;" aria-live="polite"></div>
+        </form>
+    </main>
+    <script>
 (function () {
   var form = document.getElementById("upload");
   var wait = document.getElementById("wait");
@@ -1003,30 +1039,30 @@ def process_blueprint(message):
 
 
 def reminder_email_html(company):
-    return (
-        "<table role='presentation' width='100%' cellpadding='0' cellspacing='0' "
-        "style='background:#f4f6f8;padding:24px 12px;'>"
-        "<tr><td align='center'>"
-        "<table role='presentation' width='100%' cellpadding='0' cellspacing='0' "
-        "style='max-width:560px;background:#ffffff;border-radius:12px;padding:28px 24px;"
-        "font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;font-size:15px;line-height:1.5;'>"
-        "<tr><td>"
-        "<p style='margin:0 0 8px;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;"
-        "color:#52606d;'>" + company + "</p>"
-        "<h1 style='margin:0 0 12px;font-size:22px;line-height:1.3;'>"
-        "Upload needed — {{1.value}}</h1>"
-        "<p style='margin:0 0 20px;color:#52606d;'>Hello " + YOUR_FIRST_NAME + ", it is the evening of the last day of the month, "
-        "and no hours report for " + company + " was logged yet.</p>"
-        "<p style='margin:0 0 20px;color:#52606d;'>Upload the Clockify PDF with the form below.</p>"
-        "<p style='margin:0 0 20px;color:#52606d;'>The Gmail draft is created automatically.</p>"
-        "<p style='margin:0 0 20px;'>"
-        "<a href='" + UPLOAD_FORM_URL + "' "
-        "style='display:inline-block;background:#0f6f4e;color:#ffffff;text-decoration:none;"
-        "font-weight:600;font-size:16px;padding:14px 22px;border-radius:10px;'>"
-        "Upload the report</a></p>"
-        "</td></tr></table>"
-        "</td></tr></table>"
-    )
+    return f"""<table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='background:#f4f6f8;padding:24px 12px;'>
+    <tr>
+        <td align='center'>
+            <table role='presentation' width='100%' cellpadding='0' cellspacing='0'
+                style='max-width:560px;background:#ffffff;border-radius:12px;padding:28px 24px;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#1f2933;font-size:15px;line-height:1.5;'>
+                <tr>
+                    <td>
+                        <p
+                            style='margin:0 0 8px;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;color:#52606d;'>
+                            {company}</p>
+                        <h1 style='margin:0 0 12px;font-size:22px;line-height:1.3;'>Upload needed — {{{{1.value}}}}</h1>
+                        <p style='margin:0 0 20px;color:#52606d;'>Hello {YOUR_FIRST_NAME}, it is the evening of the last
+                            day of the month, and no hours report for {company} was logged yet.</p>
+                        <p style='margin:0 0 20px;color:#52606d;'>Upload the Clockify PDF with the form below.</p>
+                        <p style='margin:0 0 20px;color:#52606d;'>The Gmail draft is created automatically.</p>
+                        <p style='margin:0 0 20px;'><a href='{UPLOAD_FORM_URL}'
+                                style='display:inline-block;background:#0f6f4e;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px;padding:14px 22px;border-radius:10px;'>Upload
+                                the report</a></p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>"""
 
 
 def sheet_reminder_flow(list_id, feed_id, read_id, missing_id, mail_id):
@@ -1306,13 +1342,14 @@ def check(process, reminder, message):
     assert SUCCESS in json.dumps(process)
     assert "{{12.value}} drafts was created." in json.dumps(process)
     assert "Open Gmail drafts, review the attached PDF" in json.dumps(process)
-    assert OVERTIME_NOTE in message
-    assert OVERTIME_RATE in message
+    assert overtime_block(OVERTIME_HOURS) in message
+    assert overtime_block("") == ""
     assert "overtime component" not in message
-    assert (
-        "<p style='margin:0;'>" + OVERTIME_NOTE + "</p>"
-        "<p style='margin:8px 0 0;'>" + OVERTIME_RATE + "</p>"
-    ) in message
+    if OVERTIME_HOURS:
+        assert f"> {int(OVERTIME_HOURS)} * 60; " in message
+        assert f"exceeds {int(OVERTIME_HOURS)} hours." in message
+    else:
+        assert "* 60; " not in message
     assert f"{APPROVER_NAME}, please approve this time report." in message
     assert f"@{APPROVER_NAME.split()[0]}" not in message
     assert f"{HOURLY_RATE} ILS" in message
@@ -1382,9 +1419,11 @@ def check(process, reminder, message):
         expected_subtotal * (100 + VAT_PERCENT) / 100,
     )
     assert money("79:45")[0] == 4785
-    assert money("79:45")[0] < 4800
-    assert money("80:00")[0] == 4800
-    assert money("80:01")[0] == 4801
+    if OVERTIME_HOURS:
+        threshold = int(OVERTIME_HOURS) * 60
+        assert money(f"{int(OVERTIME_HOURS) - 1}:45")[0] < threshold
+        assert money(f"{int(OVERTIME_HOURS)}:00")[0] == threshold
+        assert money(f"{int(OVERTIME_HOURS)}:01")[0] == threshold + 1
     one_minute = HOURLY_RATE / 60
     assert money("00:01")[1:] == (one_minute, one_minute * VAT_PERCENT / 100, one_minute * (100 + VAT_PERCENT) / 100)
 
@@ -1593,12 +1632,6 @@ def check(process, reminder, message):
     assert REMINDER_AUTH_VALUE in reminder_blob
     assert "Check token" in reminder_blob
     assert "Reject the token" in reminder_blob
-    ics = (ROOT / "clockify-monthly-reminder.ics").read_text(encoding="utf-8")
-    assert "SUMMARY:Clockify monthly report" in ics
-    assert "UID:clockify-monthly-reminder@clockify-monthly-report" in ics
-    assert "SUMMARY:Clockify inbox pickup" not in ics
-    assert "20261031T193000" in ics
-    assert "20261031T190000" not in ics
     add = next(n for n in every if n["id"] == ADD_ROW)
     assert add["module"] == "google-sheets:addRow"
     assert add["mapper"]["mode"] == "map"
@@ -1631,305 +1664,236 @@ def check(process, reminder, message):
 def setup_md():
     return f"""# Clockify monthly report
 
-You open `upload.html` in any browser.
+This guide sets up a monthly time report.
 
-The form posts to same-origin `/api/upload` (a Cloudflare Pages Function that forwards to Make).
+Each month you export a Clockify summary as a PDF and upload it on a web page.
 
-Success and error HTML stay under the form — the browser never navigates to the webhook URL, and the webhook URL is not in the page HTML.
+The upload creates a Gmail draft with the PDF attached and adds a row to a Google Sheet.
 
-Make, running under the Gmail account you connect once on a desktop, has Google Drive turn the PDF into text, appends a row, creates a draft, and saves the file.
+If a month is still missing near its end, a reminder email is sent to you.
 
-A second scenario starts from a Custom Webhook.
+## What you need
 
-Call that webhook with header `Authorization: Bearer <reminder-token>` (already filled in the Check token filters; different from the upload form password).
+- A Google account with Gmail, Google Drive, and Google Sheets.
+- A Make.com account.
+- A Cloudflare account, for the upload page.
+- A Google account for Apps Script, which can be the same account.
+- Python 3 and Node.js on your computer.
+- Access to the monthly report in Clockify.
 
-Body may be JSON such as `{{\"trigger\":\"end_of_month\"}}`.
+## Step 1: Configure the values
 
-The webhook must have Advanced → Get request headers = Yes.
+1. Copy `clockify.env.example` to `clockify.env`.
 
-A wrong or missing Authorization value gets HTTP 403 and stops.
+   Keep `clockify.env` private, because it holds passwords and IDs.
 
-The ICS file `clockify-monthly-reminder.ics` is only a calendar reminder; it does not trigger Make by itself.
+2. Fill in every key with your own value.
 
-That run walks Drive PDFs (or a no-op slot if the folder is empty), waits until they are all processed, then checks every spreadsheet tab.
+   | Key | Where to get it |
+   | --- | --- |
+   | `TO_RECIPIENTS` | You choose. Comma-separated addresses that receive the Gmail draft. |
+   | `CC_RECIPIENTS` | You choose. Comma-separated addresses to copy on the draft. |
+   | `APPROVER_NAME` | You choose. The name the draft asks to approve the report. |
+   | `YOUR_NAME` | Your full name. It appears in the PDF filename. |
+   | `YOUR_FIRST_NAME` | Your first name. It appears in the reminder greeting. |
+   | `YOUR_EMAIL` | Your own address. It receives the reminder. |
+   | `CLIENT_NAME` | The client name exactly as Clockify shows it. It appears in the PDF filename. |
+   | `UPLOAD_FORM_URL` | The address Cloudflare prints after the deploy in Step 6. |
+   | `PROCESS_WEBHOOK_URL` | The URL Make shows for the custom webhook you create in Step 5. |
+   | `FORM_PASSWORD` | You choose. Use a long, unique password. |
+   | `REMINDER_TOKEN` | You choose. Use a long random string, for example from `openssl rand -hex 24`. |
+   | `SPREADSHEET_ID` | The part of the Google Sheet URL between `/d/` and `/edit`. |
+   | `CLOCKIFY_REPORTS_FOLDER_ID` | The part of the Drive folder URL after `/folders/` for the `Clockify Reports` folder. |
+   | `PROCESSED_FOLDER_ID` | The same, for the `Processed` folder inside it. |
+   | `PROCESS_HOOK_ID` | Not looked up. Any whole number that differs from `REMINDER_HOOK_ID`. |
+   | `REMINDER_HOOK_ID` | Not looked up. Any whole number that differs from `PROCESS_HOOK_ID`. |
+   | `HOURLY_RATE` | Your hourly rate in ILS as a whole number, for example `330`. |
+   | `VAT_PERCENT` | The VAT percentage you charge, for example `18`. |
+   | `OVERTIME_THRESHOLD_HOURS` | The hours a month can reach before the draft shows the overtime box. Leave it empty to turn the box off. |
+   | `OVERTIME_RATE_NOTE` | The text shown in the overtime box, under the threshold line. |
 
-A reminder email is sent only when Sheets returns HTTP 200 with a body and the month value is confirmed missing after trim/lower match.
+   When you import a blueprint in Make, you pick the webhook yourself, so the hook IDs are never typed into Make.
 
-A Sheets error is treated as unknown (no email), not as missing.
+   The generator uses the hook IDs only to build the blueprint, then replaces them with placeholders in the shared files.
 
-## Create these first
+   `HOURLY_RATE` must be a multiple of 3, because the Make formulas need a whole number of agorot per minute.
 
-1. A Google Sheet whose first row is exactly these headers, left to right:
+## Step 2: Generate the files
 
-   Month/Year, Start Date, End Date, Total Hours, Hourly Rate, Approver, To, CC, VAT
+1. Open a terminal in the repo folder.
+2. Run these two commands:
 
-   The blueprint writes columns A–I in that order.
+```
+python3 _generate.py
+python3 fill_html.py
+```
 
-   Each company has its own tab named exactly like the Clockify client (e.g. `<CLIENT_NAME>`).
+3. The first command prints `ALL_PASS` when every check succeeds.
+4. The second command writes `filled/email-draft.html` and `filled/email.html` with your values.
 
-   Rename or add tabs to match; the processing scenario uses `{{{{30.company}}}}` for the tab.
+   Use the files in `filled/` for anything you paste into Make.
 
-   The reminder lists every tab and mails once per company missing this month.
+Run both commands again every time you change `clockify.env`.
 
-2. Drive folders: `Clockify Reports` (inbox the reminder picks up from) and `Clockify Reports/Processed` (finished PDFs).
+`filled/`, `functions/`, and `clockify.env` hold your values, so keep them private.
 
-   You can also upload with the web form.
+## Step 3: Set up the Google Sheet and Drive folders
 
-3. In Clockify, set the profile date format to `DD/MM/YYYY`.
+1. Create a Google Sheet.
+2. In row 1, put these headers from left to right: `Month/Year`, `Start Date`, `End Date`, `Total Hours`, `Hourly Rate`, `Approver`, `To`, `CC`, `VAT`.
 
-   The Total line must be `HH:MM` or `HH:MM:SS`.
+   The processing scenario writes columns A to I in that order.
 
-   Drive reads that text when it converts the PDF to a Google Doc.
+3. Create one tab for each client, named exactly like the client in Clockify.
+4. Copy the spreadsheet ID from the sheet URL, which is the part between `/d/` and `/edit`, into `SPREADSHEET_ID`.
+5. In Google Drive, create a folder named `Clockify Reports`.
+6. Inside it, create a folder named `Processed`.
+7. Copy the ID of each folder from its URL, which is the part after `/folders/`, into `CLOCKIFY_REPORTS_FOLDER_ID` and `PROCESSED_FOLDER_ID`.
+8. Run Step 2 again.
 
-   A scanned PDF with no text layer will not work.
+## Step 4: Set up Clockify
 
-   The Detailed report must include a line like `Client - Project - Task`; the client name before the first ` - ` becomes the company in the PDF filename.
+1. In your Clockify profile, set the date format to `DD/MM/YYYY`.
+2. The Total line in the PDF must read `HH:MM` or `HH:MM:SS`.
+3. The detailed report must include a line like `Client - Project - Task`.
 
-## Replace these placeholders
+   The client name before the first ` - ` becomes the company name, the Sheet tab, and the PDF filename.
 
-| Placeholder | Where | Replace with |
-| --- | --- | --- |
-| Webhook URL | `upload.html` and the reminder’s HTTP module | `<PROCESS_WEBHOOK_URL>` |
-| Form password | Process password filters, and the reminder’s HTTP module to process | `<FORM_PASSWORD>` |
-| Reminder Authorization | Reminder Check token filters | `<REMINDER_TOKEN>` |
-| Spreadsheet id | Both “Read logged months” modules | `<SPREADSHEET_ID>` |
-| Drive folder IDs | Upload into Processed, and Rename/move if used | `<CLOCKIFY_REPORTS_FOLDER_ID>`, `<PROCESSED_FOLDER_ID>` |
-| Form URL | Reminder email | `<UPLOAD_FORM_URL>` |
-| Reminder inbox | Reminder email To | `<YOUR_EMAIL>` |
-| Hourly rate and VAT | Make formulas, Append row, and the draft email | `<HOURLY_RATE_ILS>`, `<VAT_PERCENT>` |
-| Recipients | Append row and Create Gmail draft | `<TO_EMAIL_1>`, `<TO_EMAIL_2>`, `<CC_EMAIL_1>` to `<CC_EMAIL_4>` |
-| Your name and approver | PDF filename, reminder email, draft email | `<YOUR_NAME>`, `<YOUR_FIRST_NAME>`, `<APPROVER_NAME>`, `<CLIENT_NAME>` |
-| Overtime note | Draft email | `<OVERTIME_RATE_NOTE>`, or delete that paragraph |
+4. Export the monthly report as a PDF that contains selectable text.
 
-Notes on the table:
+   A scanned PDF without text will not work.
 
-- Do not commit `upload.html`.
+## Step 5: Import the processing scenario in Make
 
-- Set `<FORM_PASSWORD>` in both places.
+1. In Make, create a scenario and set its timezone to the one you report in. The examples use `Asia/Jerusalem`.
+2. Open the three-dot menu and choose Import Blueprint.
+3. Select `blueprints/process-report.blueprint.json`.
+4. Connect the Google Drive and Google Sheets modules with a Google account that can open your folders and sheet.
+5. Connect the Gmail module with the Gmail app, version 4, using the account that should create the drafts.
+6. In the first module, a custom webhook, select or create a webhook.
 
-- Type the form password into the form’s Password field.
+   Copy its URL into `PROCESS_WEBHOOK_URL`, then run Step 2 again.
 
-- Do not put the form password in `upload.html`.
+7. Keep the first module's scheduling on Immediately, with a maximum of 5 runs per minute.
+8. Replace the placeholders as described in "Replace the placeholders in Make" below.
+9. Save the scenario, then turn it on.
 
-- Set `<REMINDER_TOKEN>` as `Bearer <REMINDER_TOKEN>`.
+If a Google module did not import, add a Google Drive module that uploads a file with Convert set to Yes and the target Google Docs, and a Google Drive module that downloads the file as Google Docs in plain text.
 
-- Send the same header when calling the reminder webhook.
+## Step 6: Deploy the upload page on Cloudflare Pages
 
-- Do not put the reminder token in `upload.html`.
-
-Host `upload.html` on Cloudflare Pages.
-
-The generator writes the form to `pages/index.html` and a same-origin proxy to `functions/api/upload.js` (webhook URL stays server-side only).
-
-From this repo:
+1. Open a terminal in the repo folder.
+2. Run these two commands, and replace `YOUR-PROJECT-NAME` with a name you choose:
 
 ```
 npx wrangler login
-npx wrangler pages deploy pages --project-name clockify-upload
+npx wrangler pages deploy pages --project-name YOUR-PROJECT-NAME
 ```
 
-Deploy from the repo root so Wrangler picks up the sibling `functions/` folder.
+3. Copy the address Cloudflare shows for the deployment into `UPLOAD_FORM_URL`, then run Step 2 again.
+4. Deploy from the repo root, so the `functions/` folder is deployed with the page.
 
-Do not put the form behind Google sign-in.
+The upload page asks for the PDF and the password.
 
-The form asks for a password; that value is what Make already checks.
+The page never shows the webhook URL or the password.
 
-Deploy only `pages` + `functions` so the blueprints (and the form password) stay out of the public site except for the server-side webhook forwarder.
+The function forwards uploads to the value of the `MAKE_WEBHOOK_URL` variable in Cloudflare if you set one, and otherwise to the URL in `functions/api/upload.js`.
 
-## Import the processing scenario
+## Step 7: Import the reminder scenario in Make
 
-1. In Make, create a scenario and set the timezone to `Asia/Jerusalem`.
-2. Open the three-dot menu and choose Import blueprint.
-
-   Select `blueprints/process-report.blueprint.json`.
-
-3. In the first module (Custom webhook, Clockify report), select or create a webhook.
-
-   Leave JSON pass-through off.
-
-   Scheduling stays Immediately, as data arrives, with a maximum of **5** runs per minute.
-
-   Do not switch it to an interval.
-
-4. Open Read the PDF in Drive and PDF text, and connect the restricted Drive account.
-
-   The first uploads the PDF as a temporary Google Doc in Processed.
-
-   The second downloads that Doc as plain text.
-
-   Delete the temporary Doc removes it.
-
-   If a module did not import, add Google Drive → Upload a file (Convert a file: Yes, target Google Docs) and Google Drive → Download a file (advanced settings: Google Docs as plain text).
-
-5. Open Read logged months and connect Google.
-
-   Replace `<SPREADSHEET_ID>` with your spreadsheet id.
-
-   If that module did not import, add Google Sheets → Make an API call, method GET, URL `spreadsheets/<SPREADSHEET_ID>/values/'{{{{30.company}}}}'!A2:A` (quotes around the tab name).
-
-6. Open Append the month, connect the same Google account.
-
-   Search Method is **Enter manually** (`mode: map`).
-
-   Replace `<SPREADSHEET_ID>` with your spreadsheet id, and set Sheet Name to `{{{{30.company}}}}`.
-
-   Confirm the nine Values in columns are still mapped.
-
-   `85:30` is written as plain text so Sheets does not turn it into a time of day.
-
-7. Open Create Gmail draft and pick the new Gmail connection (Gmail app v4, not the restricted Google one).
-
-   Folders can stay empty; drafts go to Drafts.
-
-   If the module is missing, add Gmail → Create a draft email, Body type Raw HTML, and paste `email-draft.html` into Content.
-
-   Map the attachment data from `report` → `Data` on the webhook.
-
-   The filename is `<YOUR_NAME>_Time_Report_[Company]_[Month]_[Year].pdf`, with company taken from the PDF text (spaces become `_`).
-
-8. Open Upload into Processed, connect Drive, and choose `Clockify Reports/Processed` (form path).
-9. Open both Rename and move into Processed modules if present; they run only when `driveFileId` is set.
-10. Save, then turn the scenario on.
-
-    The browser waits for this scenario to finish.
-
-    Make’s webhook response limit is about 40 seconds.
-
-An entry whose duration is longer than 9:00:00 stops the run.
-
-Nothing is logged and no client draft is created.
-
-The page shows that duration.
-
-Tick “An entry over 9 hours is correct.” and upload the same PDF to continue.
-
-A file from Drive sends the same warning to `<YOUR_EMAIL>` instead.
-
-Submit one PDF with the password so the webhook learns `password` and `report`.
-
-If pills are red, re-select `password` and `report` → Data on Read the PDF in Drive.
-
-A failed run can leave a Google Doc named Clockify_extract in Processed; delete it before trying again.
-
-## Import the reminder scenario
-
-1. Create a second scenario, timezone `Asia/Jerusalem`.
+1. Create a second scenario with the same timezone as Step 5.
 2. Import `blueprints/monthly-reminder.blueprint.json`.
-3. Open Reminder trigger (Custom webhook).
+3. In the first module, a custom webhook, select or create a webhook.
 
-   It must be the **first** module.
+   Copy its URL, because Step 8 needs it.
 
-   Select or create the webhook, and paste its URL wherever you call it from.
+4. In that module's advanced settings, turn on Get request headers.
+5. Connect the Google Drive, Google Sheets, and Gmail modules as in Step 5.
+6. Replace the placeholders as described below.
+7. Save the scenario, then turn it on.
 
-   Edit the webhook → Advanced settings → **Get request headers = Yes**.
+The Check token module rejects any call whose `Authorization` header is not `Bearer` followed by your `REMINDER_TOKEN`, with HTTP 403.
 
-   Scheduling: Immediately.
+## Replace the placeholders in Make
 
-   Maximum runs to start per minute: **5**.
+The imported scenarios contain placeholders written in capital letters inside angle brackets, such as `<SPREADSHEET_ID>`.
 
-4. Open Check token.
+Replace each placeholder with the value of the same key in `clockify.env`.
 
-   Filters read header `authorization` via `__IMTHEADERS__` and compare to `Bearer ` + reminder token.
+Two groups are handled differently.
 
-   Bad path Reject the token returns 403.
+- Webhook fields: select the webhook in Make instead of typing an ID.
+- Recipients: `<TO_EMAIL_1>` and `<TO_EMAIL_2>` take the first and second entries of `TO_RECIPIENTS`, and `<CC_EMAIL_1>` to `<CC_EMAIL_4>` take the entries of `CC_RECIPIENTS` in order.
 
-   Call once with `Authorization: Bearer …` so Make sees headers in the bundle.
+`<HOURLY_RATE_ILS>` takes the value of `HOURLY_RATE`.
 
-   Calendar / Apps Script HTTP must send that header.
+## Step 8: Schedule the reminder with Apps Script
 
-5. Connect the restricted Drive account on **Look in Clockify Reports** and **Download from Clockify Reports**.
+1. Go to script.google.com, and click New project.
+2. In the editor, select the default `Code.gs` file, delete its contents, paste the contents of `apps-script/Code.gs`, and press Cmd+S.
+3. In the left menu, click the gear icon. This opens Project Settings.
+4. Set the time zone to `Asia/Jerusalem`.
 
-   Connect Google on **List sheet tabs** and **Read logged months**.
+   The script stops with an error in any other time zone.
 
-6. Open Send the reminder (Gmail v4).
+5. Scroll down to Script Properties, and click Add script property.
+6. Add `MAKE_URL` with the reminder webhook URL from Step 7.
+7. Add `MAKE_TOKEN` with the value of `REMINDER_TOKEN`.
 
-   One module only.
+   Keep both values in Script Properties only, and never paste them into `Code.gs`.
+   The script stops with "Missing configuration properties." if either one is missing.
 
-   To is `<YOUR_EMAIL>`.
+8. Go back to the editor, choose `scheduleLastDayTrigger` in the function dropdown in the toolbar, click Run, and approve the permissions it asks for.
 
-   Filter **Confirmed missing month after Sheets OK**: Read logged months statusCode 200, body exists, and Month missing = 1.
+The script then runs on the first day of each month at 09:00, and schedules that month's reminder.
 
-   Month year is exact `MMMM YYYY` (e.g. `October 2026`); matching trims and lowercases both sides.
+The reminder runs at 19:00 on the last working day of the month.
 
-   There must be no filters that reference a deleted Calendar module.
+When the last day is a Friday, a Saturday, or a holiday, the reminder moves to an earlier day.
 
-7. Optional: import `clockify-monthly-reminder.ics` into your calendar so you get a 19:30 last-day ping, and have that (or another Make scenario) HTTP-call the reminder webhook with `Authorization: Bearer …`.
+Before a holiday, the reminder runs at 15:00.
 
-When the reminder webhook runs with a valid token:
+The script reads the Jewish holidays from hebcal.com.
 
-- Every real PDF in Clockify Reports is processed first (company from PDF text).
+## Step 9: Test the setup
 
-- An empty Drive uses a no-op slot so the flow continues.
+1. Upload one monthly PDF on your upload page with your `FORM_PASSWORD`.
+2. Expect these results:
 
-- Then sheet tabs are checked once.
+   - The page says the report was processed.
+   - A row appears in the Sheet tab for the client.
+   - A Gmail draft appears in Drafts with the PDF attached.
+   - The PDF moves to the `Processed` folder.
 
-- Reminder emails go only when Sheets OK and the month is confirmed missing.
+3. Nothing is sent to the client.
 
-- After the reminder, upload via `<UPLOAD_FORM_URL>` (Drive will not be checked again that night).
+   You review the draft in Gmail and send it yourself.
 
-For a September 2026 `<CLIENT_NAME>` report the Processed filename is `<YOUR_NAME>_Time_Report_<CLIENT_NAME>_September_2026.pdf`.
-
-## Regex
-
-Dates, first match.
-
-Groups `start` and `end`:
-
-```
-{DATE_PATTERN}
-```
-
-Total duration.
-
-The match is the line that starts with Total, so a “Project Total” row is ignored.
-
-Group `hours` is `HH:MM`; a trailing `:SS` is not part of the group.
+4. Check that the reminder rejects a wrong token with HTTP 403:
 
 ```
-{HOURS_PATTERN}
+curl -X POST "REMINDER_WEBHOOK_URL" -H "Authorization: Bearer wrong-token" -H "Content-Type: application/json" -d '{{\"trigger\":\"end_of_month\"}}'
 ```
 
-Company (client) name.
+Replace `REMINDER_WEBHOOK_URL` with the URL from Step 7.
 
-First `Client - Project - Task` line; group `company` is the text before the first ` - `.
+Calling the reminder with the correct token sends the reminder email when the month is missing, so only do that when you want the email.
 
-Spaces become `_` in the PDF filename.
+## Troubleshooting
 
-```
-{COMPANY_PATTERN}
-```
+- The reminder returns 403: the token in Make does not match `REMINDER_TOKEN`.
+- The Apps Script stops with a time zone error: set the project time zone to `Asia/Jerusalem`.
+- A mapped field in Make shows a red pill: select the field again from the module's output.
+- A run stopped and left a Google Doc named `Clockify_extract` in Processed: delete it before you upload the PDF again.
+- The page asks you to confirm an entry longer than 9 hours: tick the box and upload the same PDF again.
+- The page says the month is already logged: no second row or draft is created.
 
-All three parsers read the plain text from PDF text, module 5, field `data`.
+## How the amounts are calculated
 
-After a test run, if that field is a file pill and the parser text is empty, map Data from PDF text into the parsers.
-
-## Amounts
-
-Minutes are `hours * 60 + minutes`.
-
-Decimal hours are those minutes divided by 60 (`85:30` → `85.5`).
-
-The subtotal is billable minutes times `<HOURLY_RATE_ILS>`, divided by 60.
-
-VAT is the subtotal in agorot times `<VAT_PERCENT>`, divided by 100, rounded half up, then added back.
-
-The note is included only when minutes are greater than 4800:
-
-> {OVERTIME_NOTE}
-
-> {OVERTIME_RATE}
-
-## What the browser sees
-
-`confirmation.html` is the webhook body after a new month is logged.
-
-The live page substitutes the month where it says `{{{{12.value}}}}`.
-
-The other replies are `already-processed.html`, `unreadable.html`, and `unauthorized.html`.
-
-The draft is not sent.
-
-You review it in Gmail and send it yourself.
+- Minutes are hours times 60, plus the minutes.
+- The subtotal is the month's minutes times `HOURLY_RATE`, divided by 60.
+- VAT is the subtotal times `VAT_PERCENT`, divided by 100, rounded half up.
+- The overtime box appears only when the month passes `OVERTIME_THRESHOLD_HOURS` hours, and only when that value is set.
 """
 
 
@@ -1953,7 +1917,7 @@ SHARED_REDACTIONS = [
     (f"* {VAT_PERCENT} / 100", "* <VAT_PERCENT> / 100"),
     (f"{HOURLY_RATE} ILS", "<HOURLY_RATE_ILS> ILS"),
     (f"VAT {VAT_PERCENT}%", "VAT <VAT_PERCENT>%"),
-    (OVERTIME_RATE, "<OVERTIME_RATE_NOTE>"),
+    *overtime_redactions(),
     (APPROVER_NAME, "<APPROVER_NAME>"),
     (f"Hello {YOUR_FIRST_NAME},", "Hello <YOUR_FIRST_NAME>,"),
     (YOUR_NAME, "<YOUR_NAME>"),
@@ -1981,7 +1945,7 @@ def assert_redacted(text):
 HTML_MARKERS = [
     (f"{HOURLY_RATE} ILS", "[HOURLY_RATE] ILS"),
     (f"VAT {VAT_PERCENT}%", "VAT [VAT_PERCENT]%"),
-    (OVERTIME_RATE, "[OVERTIME_RATE_NOTE]"),
+    *overtime_markers(),
     (APPROVER_NAME, "[APPROVER_NAME]"),
     (f"Hello {YOUR_FIRST_NAME},", "Hello [YOUR_FIRST_NAME],"),
     (UPLOAD_FORM_URL, "[UPLOAD_FORM_URL]"),
