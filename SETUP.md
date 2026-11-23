@@ -27,32 +27,30 @@ If a month is still missing near its end, a reminder email is sent to you.
 
    | Key | Where to get it |
    | --- | --- |
-   | `TO_RECIPIENTS` | You choose. Comma-separated addresses that receive the Gmail draft. |
-   | `CC_RECIPIENTS` | You choose. Comma-separated addresses to copy on the draft. |
-   | `APPROVER_NAME` | You choose. The name the draft asks to approve the report. |
-   | `YOUR_NAME` | Your full name. It appears in the PDF filename. |
-   | `YOUR_FIRST_NAME` | Your first name. It appears in the reminder greeting. |
-   | `YOUR_EMAIL` | Your own address. It receives the reminder. |
-   | `CLIENT_NAME` | The client name exactly as Clockify shows it. It appears in the PDF filename. |
+   | `TO_RECIPIENTS` | Comma-separated addresses, chosen by you, that receive the Gmail draft. |
+   | `CC_RECIPIENTS` | Comma-separated addresses, chosen by you, to copy on the draft. |
+   | `APPROVER_NAME` | The name the draft asks to approve the report, which you choose. |
+   | `YOUR_NAME` | Your full name, used in the PDF filename. |
+   | `YOUR_FIRST_NAME` | Your first name, used in the reminder greeting. |
+   | `YOUR_EMAIL` | Your own address, which receives the reminder. |
+   | `CLIENT_NAME` | The client name exactly as Clockify shows it, used in the PDF filename. |
    | `UPLOAD_FORM_URL` | The address Cloudflare prints after the deploy in Step 6. |
    | `PROCESS_WEBHOOK_URL` | The URL Make shows for the custom webhook you create in Step 5. |
-   | `FORM_PASSWORD` | You choose. Use a long, unique password. |
-   | `REMINDER_TOKEN` | You choose. Use a long random string, for example from `openssl rand -hex 24`. |
+   | `FORM_PASSWORD` | A long, unique password that you choose. |
+   | `REMINDER_TOKEN` | A long random string that you choose, for example from `openssl rand -hex 24`. |
    | `SPREADSHEET_ID` | The part of the Google Sheet URL between `/d/` and `/edit`. |
    | `CLOCKIFY_REPORTS_FOLDER_ID` | The part of the Drive folder URL after `/folders/` for the `Clockify Reports` folder. |
    | `PROCESSED_FOLDER_ID` | The same, for the `Processed` folder inside it. |
-   | `PROCESS_HOOK_ID` | Not looked up. Any whole number that differs from `REMINDER_HOOK_ID`. |
-   | `REMINDER_HOOK_ID` | Not looked up. Any whole number that differs from `PROCESS_HOOK_ID`. |
+   | `PROCESS_HOOK_ID` | Not looked up, any whole number that differs from `REMINDER_HOOK_ID`. |
+   | `REMINDER_HOOK_ID` | Not looked up, any whole number that differs from `PROCESS_HOOK_ID`. |
    | `HOURLY_RATE` | Your hourly rate in ILS as a whole number, for example `330`. |
    | `VAT_PERCENT` | The VAT percentage you charge, for example `18`. |
-   | `OVERTIME_THRESHOLD_HOURS` | The hours a month can reach before the draft shows the overtime box. Leave it empty to turn the box off. |
+   | `OVERTIME_THRESHOLD_HOURS` | The hours a month can reach before the draft shows the overtime box, where leaving it empty turns the box off. |
    | `OVERTIME_RATE_NOTE` | The text shown in the overtime box, under the threshold line. |
 
    When you import a blueprint in Make, you pick the webhook yourself, so the hook IDs are never typed into Make.
 
    The generator uses the hook IDs only to build the blueprint, then replaces them with placeholders in the shared files.
-
-   `HOURLY_RATE` must be a multiple of 3, because the Make formulas need a whole number of agorot per minute.
 
 ## Step 2: Generate the files
 
@@ -107,7 +105,7 @@ Make needs its own OAuth client to reach your Google Drive, Sheets, and Gmail.
 
 1. Open the Google Cloud Console at console.cloud.google.com, and create a project or pick an existing one.
 2. Enable the Google Drive API, the Google Sheets API, and the Gmail API.
-3. Set up the OAuth consent screen. If the app stays in testing, add your Google account under Test users.
+3. Set up the OAuth consent screen, and if the app stays in testing, add your Google account under Test users.
 4. Open Credentials, click Create credentials, and choose OAuth client ID.
 5. Choose Web application as the application type.
 6. Copy the redirect URI that Make shows in its Google connection dialog, and add it under Authorized redirect URIs.
@@ -117,7 +115,7 @@ Keep the client secret only in Make, never in `clockify.env` or the repo.
 
 ### Import the scenario
 
-1. In Make, create a scenario and set its timezone to the one you report in. The examples use `Asia/Jerusalem`.
+1. In Make, create a scenario with the timezone you report in, for example `Asia/Jerusalem`.
 2. Open the three-dot menu and choose Import Blueprint.
 3. Select `blueprints/process-report.blueprint.json`.
 4. Connect the Google Drive and Google Sheets modules with the OAuth client from the section above, using a Google account that can open your folders and sheet.
@@ -183,7 +181,7 @@ Two groups are handled differently.
 
 1. Go to script.google.com, and click New project.
 2. In the editor, select the default `Code.gs` file, delete its contents, paste the contents of `apps-script/Code.gs`, and press Cmd+S.
-3. In the left menu, click the gear icon. This opens Project Settings.
+3. In the left menu, click the gear icon to open Project Settings.
 4. Set the time zone to `Asia/Jerusalem`.
 
    The script stops with an error in any other time zone.
@@ -193,6 +191,7 @@ Two groups are handled differently.
 7. Add `MAKE_TOKEN` with the value of `REMINDER_TOKEN`.
 
    Keep both values in Script Properties only, and never paste them into `Code.gs`.
+
    The script stops with "Missing configuration properties." if either one is missing.
 
 8. Go back to the editor, choose `scheduleLastDayTrigger` in the function dropdown in the toolbar, click Run, and approve the permissions it asks for.
