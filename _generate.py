@@ -1765,10 +1765,26 @@ Run both commands again every time you change `clockify.env`.
 
 ## Step 5: Import the processing scenario in Make
 
+### Create a Google OAuth client for Make
+
+Make needs its own OAuth client to reach your Google Drive, Sheets, and Gmail.
+
+1. Open the Google Cloud Console at console.cloud.google.com, and create a project or pick an existing one.
+2. Enable the Google Drive API, the Google Sheets API, and the Gmail API.
+3. Set up the OAuth consent screen. If the app stays in testing, add your Google account under Test users.
+4. Open Credentials, click Create credentials, and choose OAuth client ID.
+5. Choose Web application as the application type.
+6. Copy the redirect URI that Make shows in its Google connection dialog, and add it under Authorized redirect URIs.
+7. Click Create, then copy the client ID and client secret into the Make connection.
+
+Keep the client secret only in Make, never in `clockify.env` or the repo.
+
+### Import the scenario
+
 1. In Make, create a scenario and set its timezone to the one you report in. The examples use `Asia/Jerusalem`.
 2. Open the three-dot menu and choose Import Blueprint.
 3. Select `blueprints/process-report.blueprint.json`.
-4. Connect the Google Drive and Google Sheets modules with a Google account that can open your folders and sheet.
+4. Connect the Google Drive and Google Sheets modules with the OAuth client from the section above, using a Google account that can open your folders and sheet.
 5. Connect the Gmail module with the Gmail app, version 4, using the account that should create the drafts.
 6. In the first module, a custom webhook, select or create a webhook.
 
